@@ -31,9 +31,11 @@ private:
 
 
 private:
+	// POINTERS & SMART POINTERS
 	std::unique_ptr<Window> m_window;
 	LayerStack m_LayerStack;
 	bool m_isRunning = true;
+
 
 	// SINGLETON INSTANCE POINTER FOR GLOBAL CALLBACK
 	static Application* s_instance;

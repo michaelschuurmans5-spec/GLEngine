@@ -1,5 +1,8 @@
 #include "core/Application.h"
 #include "core/Log.h"
+#include "core/Window.h"
+#include "GLFW/glfw3.h"
+
 
 #include <iostream>
 
@@ -22,8 +25,15 @@ Application::Application() {
 	// INIT LOG SYSTEM 
 	Log::Init();
 	ENGINE_INFO("Engine Initializing");
-
 	std::cout << "Engine Initializing" << std::endl;
+	// INIT GLFW
+	if (!glfwInit()) {
+		ENGINE_ERROR("Failed to Initialize GLFW globally!");
+		std::cerr << "Critical Error: GLFW initialization failed!" << std::endl;
+		m_isRunning = false;
+		return;
+	}
+	// CREATE WINDOW
 	m_window = std::make_unique<Window>(800, 600, "GLEngine");
 
 	// ROUTE GLFW CALLBACKS TO SYSTEM ARCHITECTURE
@@ -32,7 +42,9 @@ Application::Application() {
 //DESTRUCTOR
 Application::~Application() {
 
-	std::cout << "Engine Shutting Down..." << std::endl;	
+	std::cout << "Engine Shutting Down..." << std::endl;
+	// SHUTDOWN GLFW
+	glfwTerminate();
 }
 // APPLICATION RUN LOOP
 void Application::Run() {
@@ -77,5 +89,13 @@ void Application::Render()
 void Application::Close()
 {
 	m_isRunning = false;
+}
+
+void Application::PushLayer(Layer* layer) {
+	// PASS LAYER POINTER DIRECTLY TO THE LAYERSTACK CONTAINER 
+	m_LayerStack.PushLayer(layer);
+
+	// LOG THE NEW WORKSPACE MODULE WAS ADDED SUCCESSFULLY
+	ENGINE_INFO("Pushed Layer onto stack: " + layer->GetName());
 }
 

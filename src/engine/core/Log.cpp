@@ -5,6 +5,7 @@ void Log::Init() {
 	// INIT
 	Log::Print(LogLevel::Info, "SYSTEM", "Logger system initialized.");
 }
+// INTERPRETS REQUEST THEN DEBUG 
 void Log::Print(LogLevel level, const std::string& sender,
 	const std::string& message) {
 

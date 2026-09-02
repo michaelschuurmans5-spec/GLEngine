@@ -1,0 +1,27 @@
+#pragma once 
+
+#include <glad/glad.h>
+#include <string>
+
+class Shader {
+public:
+	Shader(const std::string& vertexPath, const std::string& fragmentPath);
+	~Shader();
+
+	// TELL OPENGL ACTIVATE THIS SHADER PROGRAM FOR DRAW CALLS
+	void Bind() const;
+	// TELL OPENGL TO DEACTIVATE IT
+	void Unbind() const;
+	
+	// UTILITY FUNCTION CHANGE YOUR FRAGMENT COLOR IN REAL TIME 
+	void SetUniform4f(const std::string& name, float v0, float v1, float v2, float v3);
+
+
+private:
+	// UNIQUE ID REF GEN BY OPENGL TO IDENTIFY THIS SHADER PROGRAM
+	uint32_t m_RendererID;
+
+	// INTERNAL HELPER FUNCTION TO LOAD TEXT FROM A FILE AND COMPILE IT
+	std::string ReadFile(const std::string& filepath);
+	uint32_t CompileShader(unsigned int type, const std::string& source);
+};

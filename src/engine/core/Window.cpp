@@ -10,8 +10,8 @@ Window::Window(int width, int height, const char* title)
     if (!init(width, height, title)) {
         std::cerr << "Critical Error: Window initialization failed!" << std::endl;
     }
-	// WINDOW MODE
-    if (!m_window) {
+	// WINDOW MODE STATE CHECK
+    if (m_window) {
         glfwGetWindowPos(m_window, &m_windowedX, &m_windowedY);
     }
 }
@@ -19,15 +19,11 @@ Window::Window(int width, int height, const char* title)
 Window::~Window() {
     if (m_window) {
         glfwDestroyWindow(m_window);
+        m_window = nullptr;
     }
-    glfwTerminate();
 }
 // INIT WINDOW DIMENSIONS AND TITLE
 bool Window::init(int width, int height, const char* title) {
-    if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
-        return false;
-    }
 	// GLFW VERSION AND PROFILE SETUP
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -36,7 +32,6 @@ bool Window::init(int width, int height, const char* title) {
     m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!m_window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
         return false;
     }
 	// SETS CONTEXT FOR OPENGL
