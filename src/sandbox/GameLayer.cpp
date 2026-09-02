@@ -1,6 +1,7 @@
 #include "GameLayer.h"
 #include "core/Log.h"
 #include "core/Application.h"
+#include "renderer/Camera.h"
 
 #include <glad/glad.h>
 #include <glfw/glfw3.h>
@@ -8,9 +9,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-// SQUARE COORDINATES AND SPEED
-static glm::vec2 s_SquarePosition = glm::vec2(0.0f, 0.0f);
-static float s_MoveSpeed = 0.01f;
+// NAVIGATION TRACKING SCALARS 
+static glm::vec3 s_CameraPos = glm::vec3(0.0f, 0.0f, 3.0f); // Put camera at Z=3
+static float s_CameraMoveSpeed = 0.04f;
+// MOUSE POSITIONAL DELTAS TRACKING STATE 
+static double s_LastX = 400.0, s_LastY = 300.0;
+static bool s_FirstMouse = true;
 
 GameLayer::GameLayer() : Layer("GameSandboxLayer") {}
 
@@ -46,32 +50,67 @@ void GameLayer::OnAttach() {
     m_IndexBuffer = std::make_shared<IndexBuffer>(indices, 6);
     // BIND INDEX BUFFER LAYOUT CONFIG INTO MASTER SHADER VERTEX ARRAY OBJECT
     m_VertexArray->SetIndexBuffer(m_IndexBuffer);
+
+    // CAMERA WITH AN 80 DEGREE FIELD OF VIEW 
+    m_Camera = std::make_unique<Camera>(80.0f, 1.6f, 0.1f, 100.0f);
+    m_Camera->SetPosition(s_CameraPos);
+
+    // LOCK MOUSE POINTER INSIDE VIEWPORT KEEPS CURSOR INVISBLE AND CENTERED INSIDE SCREEN CANVAS WINDOW
+    GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 void GameLayer::OnUpdate() {
     // GRAB RAW GLFW WINDOW HANDLE FROM APPLICATION LAYER 
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
 
-    // CHECK KEY PATTERNS CLEANLY EVERY FRAME 
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-        s_SquarePosition.x -= s_MoveSpeed; // MOVE LEFT
+    // ESCAPE UNLOCK SYSTEM
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
+    // MOUSE ACCELERATION CALCULATION ROUTINE
+    double mouseX, mouseY;
+    glfwGetCursorPos(window, &mouseX, &mouseY);
 
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-        s_SquarePosition.x += s_MoveSpeed; // MOVE RIGHT
+    if (s_FirstMouse) {
+        s_LastX = mouseX;
+        s_LastY = mouseY;
+        s_FirstMouse = false;
+    }
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-        s_SquarePosition.y += s_MoveSpeed; // MOVE UP
+    // Find distances the cursor traveled since the previous frame execution step
+    float xOffset = (float)(mouseX - s_LastX);
+    float yOffset = (float)(s_LastY - mouseY); // Inverted since y-coordinates go from bottom to top
 
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-        s_SquarePosition.y -= s_MoveSpeed; // MOVE DOWN
+    s_LastX = mouseX;
+    s_LastY = mouseY;
+
+    // ONLY PROCESS MOUSE LOOK IF THE CURSOR IS ACTUALLY LOCKED INSIDE SCREEN FRAME
+    if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
+        m_Camera->ProcessMouseMovement(xOffset, yOffset);
+    }
+
+    //  CAMERA FLIGHT SYSTEM (WASD MOVEMENT)
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        s_CameraPos += s_CameraMoveSpeed * m_Camera->GetFrontVector(); // Forward
+
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        s_CameraPos -= s_CameraMoveSpeed * m_Camera->GetFrontVector(); // Backward
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        s_CameraPos -= s_CameraMoveSpeed * m_Camera->GetRightVector(); // Strafe Left
+
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        s_CameraPos += s_CameraMoveSpeed * m_Camera->GetRightVector(); // Strafe Right
+
+    m_Camera->SetPosition(s_CameraPos);
 
 }
-
 void GameLayer::OnRender() {
     // ACTIVATE OUR SHADER PROGRAM PIPELINE
     m_Shader->Bind();
 
-    // DYNAMIC COLOR TIME MATH
+    // PULSING COLOR MATH
     float time = (float)glfwGetTime();
     // WAVES SMOOTHLY BACK AND FORTH 
     float greenValue = (sin(time) / 2.0f) + 0.5f;
@@ -79,17 +118,15 @@ void GameLayer::OnRender() {
     // PASS THESE CHANGING VALUES INTO UNIFORM 
     m_Shader->SetUniform4f("u_Color", redValue, greenValue, 0.2f, 1.0f);
 
-    // MATRIX ASSEMBLY PAHSE
-    glm::mat4 transform = glm::mat4(1.0f);
-    // TRANSLATE TRANSORMATION MATRIX BASED ON OUR INPUT VECTOR POSITION
-    transform = glm::translate(transform, glm::vec3(s_SquarePosition, 0.0f));
-
+    // SQUARE STAYS LOCKED IN CENTER WORLD ORIGIN
+    glm::mat4 squareTransform = glm::mat4(1.0f);
+  
     // SHADER UNIFORM
-    m_Shader->SetUniformMat4("u_Transform", transform);
+    m_Shader->SetUniformMat4("u_ViewProjection",m_Camera->GetViewProjectionMatrix());
+    m_Shader->SetUniformMat4("u_Transform", squareTransform);
 
     // BIND YOUR VERTEXARRAY ABSTRACTION OBJECT
     m_VertexArray->Bind();
-
     // ISSUE THE DRAW CALL TO THE HARDWARE
     glDrawElements(
         GL_TRIANGLES,

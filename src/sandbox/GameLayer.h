@@ -4,6 +4,7 @@
 #include "renderer/shader.h"
 #include "renderer/VertexArray.h"
 #include "renderer/Buffer.h"    
+#include "renderer/Camera.h" 
 
 #include <memory>
 
@@ -25,5 +26,8 @@ private:
 	std::shared_ptr<VertexBuffer> m_VertexBuffer;
 	// INDEX BUFFER
 	std::shared_ptr<IndexBuffer> m_IndexBuffer;
+
+	// SMART POINTER 
+	std::unique_ptr<Camera> m_Camera;
 
 };

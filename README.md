@@ -22,5 +22,10 @@ Rectangle move using input Shader UniformMat4 transform:
 <img width="3506" height="1986" alt="Recording Basic Rectangle move with input " src="https://github.com/user-attachments/assets/fcc2f544-fadb-4ca6-a45a-c01cc387f538" />
 
 
+Camera system added Camera class wrapper and shader uniformMat4 ViewProjection * UniformMat transformation:
+
+<img width="722" height="442" alt="Recording Square transform UniformMat4   ViewProjection UniformMat4 Camera movement" src="https://github.com/user-attachments/assets/88bcfea4-fe39-4167-a17b-9f1e7ce991af" />
+
+
 
 

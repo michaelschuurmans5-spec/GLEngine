@@ -18,6 +18,8 @@ set(ENGINE_SOURCES
     "engine/renderer/VertexArray.cpp"
     "engine/renderer/Buffer.h"
     "engine/renderer/Buffer.cpp"
+    "engine/renderer/Camera.h"
+    "engine/renderer/Camera.cpp"
 )
 
 # Compile the core engine as a static library
