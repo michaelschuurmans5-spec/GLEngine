@@ -20,8 +20,10 @@ public:
 private:
 	// SHADER
 	std::unique_ptr<Shader> m_Shader;
-
 	// ARRAY & BUFFER
 	std::shared_ptr<VertexArray> m_VertexArray;
 	std::shared_ptr<VertexBuffer> m_VertexBuffer;
+	// INDEX BUFFER
+	std::shared_ptr<IndexBuffer> m_IndexBuffer;
+
 };

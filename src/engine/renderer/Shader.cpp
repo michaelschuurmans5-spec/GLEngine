@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iostream>
 #include <vector>
+#include <glm/gtc/type_ptr.hpp>
 
 
 Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath) {
@@ -98,8 +99,16 @@ std::string Shader::ReadFile(const std::string& filepath) {
 	}
 	return result;
 }
-
-
+void Shader::SetUniformMat4(const std::string& name, const glm::mat4& matrix)
+{
+	int location = glGetUniformLocation(m_RendererID, name.c_str());
+	if (location == -1) {
+		ENGINE_WARN("Warning: Uniform '" + name + "' not found in shader source!");
+		return;
+	}
+	
+	glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
+}
 uint32_t Shader::CompileShader(unsigned int type,
 	const std::string& source) {
 	// GENERATE TEMPORARY SLOT FOR THIS SHADER STAGE

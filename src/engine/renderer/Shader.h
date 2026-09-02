@@ -1,6 +1,7 @@
 #pragma once 
 
 #include <glad/glad.h>
+#include <glm/glm.hpp>
 #include <string>
 
 class Shader {
@@ -15,7 +16,7 @@ public:
 	
 	// UTILITY FUNCTION CHANGE YOUR FRAGMENT COLOR IN REAL TIME 
 	void SetUniform4f(const std::string& name, float v0, float v1, float v2, float v3);
-
+	void SetUniformMat4(const std::string& name, const glm::mat4& matrix);
 
 private:
 	// UNIQUE ID REF GEN BY OPENGL TO IDENTIFY THIS SHADER PROGRAM
