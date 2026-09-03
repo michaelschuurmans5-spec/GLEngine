@@ -21,12 +21,13 @@ GameLayer::GameLayer() : Layer("GameSandboxLayer") {}
 void GameLayer::OnAttach() {
     ENGINE_INFO("GameLayer Attached! Reading assets from external GLSL Files...");
 
-    //  DYNAMIC SQUARE LAYOUT X Y Z
+    //  DYNAMIC DATA STRIDE
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f, // 0: Bottom-Left
-         0.5f, -0.5f, 0.0f, // 1: Bottom-Right
-         0.5f,  0.5f, 0.0f, // 2: Top-Right
-        -0.5f,  0.5f, 0.0f  // 3: Top-Left
+        // Positions          // UVs (Texture Bounds Mapping Mapping)
+       -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, // 0: Bottom-Left corner of image
+        0.5f, -0.5f, 0.0f,   1.0f, 0.0f, // 1: Bottom-Right corner of image
+        0.5f,  0.5f, 0.0f,   1.0f, 1.0f, // 2: Top-Right corner of image
+       -0.5f,  0.5f, 0.0f,   0.0f, 1.0f  // 3: Top-Left corner of image
     };
     // INDEX MAP
     uint32_t indices[] = {
@@ -50,6 +51,24 @@ void GameLayer::OnAttach() {
     m_IndexBuffer = std::make_shared<IndexBuffer>(indices, 6);
     // BIND INDEX BUFFER LAYOUT CONFIG INTO MASTER SHADER VERTEX ARRAY OBJECT
     m_VertexArray->SetIndexBuffer(m_IndexBuffer);
+
+    // TEXTURE: Snow Path
+    std::string texPath = std::string(ENGINE_ASSET_DIR) + "Textures/Snow/Snow010A_2K-PNG_Color.png";
+    m_Texture = std::make_unique<Texture>(texPath);
+
+    // TELL FRAGMENT SHADER UNIFORM THAT OUR TEXTURE IS MAPPED TO GPU HARDWARE SLOT 0
+    m_Shader->Bind();
+    m_Shader->SetUniform4f("u_Color", 1.0f, 1.0f, 1.0f, 1.0f);
+
+    // INTEGER VALUE OF 0 TELLS THE SAMPLER2D "u_Texture" TO READ HARDWARE PIPELINE SLOT GL_TEXTURE0
+    int textureSlotIndex = 0;
+    int location = glGetUniformLocation(m_Shader->GetRendererID(), "u_Texture");
+    if (location != -1) {
+        glUniform1i(location, textureSlotIndex);
+    }
+    else {
+        ENGINE_WARN("Warning: Uniform 'u_Texture' could not be mapped to registry!");
+    }
 
     // CAMERA WITH AN 80 DEGREE FIELD OF VIEW 
     m_Camera = std::make_unique<Camera>(80.0f, 1.6f, 0.1f, 100.0f);
@@ -109,18 +128,11 @@ void GameLayer::OnUpdate() {
 void GameLayer::OnRender() {
     // ACTIVATE OUR SHADER PROGRAM PIPELINE
     m_Shader->Bind();
-
-    // PULSING COLOR MATH
-    float time = (float)glfwGetTime();
-    // WAVES SMOOTHLY BACK AND FORTH 
-    float greenValue = (sin(time) / 2.0f) + 0.5f;
-    float redValue = (cos(time) / 2.0f) + 0.5f;
-    // PASS THESE CHANGING VALUES INTO UNIFORM 
-    m_Shader->SetUniform4f("u_Color", redValue, greenValue, 0.2f, 1.0f);
+    // BIND THE TEXTURE MAP TO HARDWARE SLOT 0 BEFORE DRAW CALL ISSUES 
+    m_Texture->Bind(0);
 
     // SQUARE STAYS LOCKED IN CENTER WORLD ORIGIN
     glm::mat4 squareTransform = glm::mat4(1.0f);
-  
     // SHADER UNIFORM
     m_Shader->SetUniformMat4("u_ViewProjection",m_Camera->GetViewProjectionMatrix());
     m_Shader->SetUniformMat4("u_Transform", squareTransform);

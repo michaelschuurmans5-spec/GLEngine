@@ -18,21 +18,34 @@ void VertexArray::Unbind() const {
 }
 void VertexArray::AddVertexBuffer(const
 	std::shared_ptr<VertexBuffer>& vertexBuffer) {
-	// BIND THIS VERTEXARRAY LAYOUT CONTAINER FIRST 
-	glBindVertexArray(m_RendererID);
-
-	// BIND THE SOURCE VERTEX BUFFER ASSET TO CONNECT THEM
+	// BIND THIS VERTEX ARRAY LAYOUT CONTAINER FIRST 
+	glBindVertexArray(m_RendererID); // BIND TO ID: inside GPU driver
+	// BIND THE SOURCE VERTEX BUFFER ASSET TO CONNECT THEM: translates data
 	vertexBuffer->Bind();
 
-	// FOR BASIC SHAPE , HARDCODE A SIMPLE A COMPONENT POSITION FORMAT X Y Z
+	// TOTAL LAYOUT  STRIDE GAP = 5 FLOATS : 3 positions & 2 for UVs
+	uint32_t strideSize = 5 * sizeof(float);
+
+	// POSITION ATTRIBUTE (Slot location index 0 - vec3)
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(
 		0,     // Attribute index location 0 (matches 'layout (location = 0)' in shader)
 		3,     // Component count per vertex attribute (X, Y, Z coordinates = 3 floats)
 		GL_FLOAT,  // Data type
 		GL_FALSE,  //  Normalized flag
-		3 * sizeof(float),  //  Stride (Byte size gap between consecutive vertices)
-		(void*)0  // Byte offset inside the pointer buffer
+		strideSize, //  jump gap to reach the next vertex coordinate (5 floats)
+		(void*)0  // Starts right at byte location zero
+	);
+
+	// TEXTURE COORD ATTRIBUTE (Slot location index 1 - vec2)
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(
+		1,
+		2, // U, V coordinates
+		GL_FLOAT,
+		GL_FALSE,
+		strideSize,
+		(void*)(3 * sizeof(float)) // NEW STRIDE OFFSET: Skips the 3 position floats to find UV bytes!
 	);
 }
 // LINK INDEX BUFFER OBJECT TO THIS VERTEX ARRAY STATE MAP

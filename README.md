@@ -22,9 +22,14 @@ Rectangle move using input Shader UniformMat4 transform:
 <img width="3506" height="1986" alt="Recording Basic Rectangle move with input " src="https://github.com/user-attachments/assets/fcc2f544-fadb-4ca6-a45a-c01cc387f538" />
 
 
-Camera system added Camera class wrapper and shader uniformMat4 ViewProjection * UniformMat transformation:
+Camera system added Camera class wrapper and shader uniformMat4 ViewProjection * UniformMat4 transformation:
 
 <img width="722" height="442" alt="Recording Square transform UniformMat4   ViewProjection UniformMat4 Camera movement" src="https://github.com/user-attachments/assets/88bcfea4-fe39-4167-a17b-9f1e7ce991af" />
+
+
+Texture class Wrapper stb library loader , shader layout location 1 pass UVs TexCoord Basic Snow 2k texture:
+
+<img width="690" height="642" alt="image" src="https://github.com/user-attachments/assets/3c39bacf-dc48-4167-a839-26802f18604f" />
 
 
 

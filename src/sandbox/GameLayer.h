@@ -5,6 +5,7 @@
 #include "renderer/VertexArray.h"
 #include "renderer/Buffer.h"    
 #include "renderer/Camera.h" 
+#include "renderer/Texture.h"
 
 #include <memory>
 
@@ -27,7 +28,9 @@ private:
 	// INDEX BUFFER
 	std::shared_ptr<IndexBuffer> m_IndexBuffer;
 
-	// SMART POINTER 
+	// CAMERA
 	std::unique_ptr<Camera> m_Camera;
+	// TEXTURE
+	std::unique_ptr<Texture> m_Texture;
 
 };

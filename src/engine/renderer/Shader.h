@@ -18,6 +18,9 @@ public:
 	void SetUniform4f(const std::string& name, float v0, float v1, float v2, float v3);
 	void SetUniformMat4(const std::string& name, const glm::mat4& matrix);
 
+	// GETTERS
+	uint32_t GetRendererID() const { return m_RendererID; }
+
 private:
 	// UNIQUE ID REF GEN BY OPENGL TO IDENTIFY THIS SHADER PROGRAM
 	uint32_t m_RendererID;

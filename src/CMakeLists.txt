@@ -20,6 +20,8 @@ set(ENGINE_SOURCES
     "engine/renderer/Buffer.cpp"
     "engine/renderer/Camera.h"
     "engine/renderer/Camera.cpp"
+    "engine/renderer/Texture.h"
+    "engine/renderer/Texture.cpp"
 )
 
 # Compile the core engine as a static library
@@ -28,7 +30,8 @@ add_library(EngineCore STATIC ${ENGINE_SOURCES})
 # Expose include directories so files can find each other via clean paths
 target_include_directories(EngineCore PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
-    ${CMAKE_CURRENT_SOURCE_DIR}/../external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external 
+     ${CMAKE_CURRENT_SOURCE_DIR}/../external/glm
 )
 
 # Link hardware dependencies directly into your engine library
