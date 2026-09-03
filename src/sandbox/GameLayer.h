@@ -20,17 +20,20 @@ public:
 	virtual void OnUpdate() override;
 	virtual void OnRender() override;
 private:
-	// SHADER
-	std::unique_ptr<Shader> m_Shader;
-	// ARRAY & BUFFER
-	std::shared_ptr<VertexArray> m_VertexArray;
-	std::shared_ptr<VertexBuffer> m_VertexBuffer;
-	// INDEX BUFFER
-	std::shared_ptr<IndexBuffer> m_IndexBuffer;
+    // SMART POINTERS
+    std::unique_ptr<Shader> m_Shader;
+    std::unique_ptr<Camera> m_Camera;
+    std::unique_ptr<Texture> m_Texture;
 
-	// CAMERA
-	std::unique_ptr<Camera> m_Camera;
-	// TEXTURE
-	std::unique_ptr<Texture> m_Texture;
+    // ENTITY 1: THE CUBE ASSETS
+    std::shared_ptr<VertexArray> m_CubeVAO;
+    std::shared_ptr<VertexBuffer> m_CubeVBO;
+    std::shared_ptr<IndexBuffer> m_CubeEBO;
+
+    // ENTITY 2: THE HUMAN MESH ASSETS
+    std::shared_ptr<VertexArray> m_HumanVAO;
+    std::shared_ptr<VertexBuffer> m_HumanVBO;
+    std::shared_ptr<IndexBuffer> m_HumanEBO;
+    uint32_t m_HumanIndexCount = 0;
 
 };

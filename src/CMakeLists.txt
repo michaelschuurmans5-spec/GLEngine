@@ -22,20 +22,38 @@ set(ENGINE_SOURCES
     "engine/renderer/Camera.cpp"
     "engine/renderer/Texture.h"
     "engine/renderer/Texture.cpp"
+    "engine/resources/ModelLoader.h"
+    "engine/resources/ModelLoader.cpp"
 )
+
+# Disable Assimp's unit tests and sample apps (removes a huge chunk of files)
+set(ASSIMP_BUILD_TESTS OFF CACHE INTERNAL "")
+set(ASSIMP_BUILD_SAMPLES OFF CACHE INTERNAL "")
+
+# Disable all formats first, then explicitly turn on the one(s) you want
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE INTERNAL "")
+set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE INTERNAL "")  # Turn on .obj loader
+set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE INTERNAL "") # Turn on .gltf loader
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp ${CMAKE_CURRENT_BINARY_DIR}/assimp_build)
+
 
 # Compile the core engine as a static library
 add_library(EngineCore STATIC ${ENGINE_SOURCES})
+
 
 # Expose include directories so files can find each other via clean paths
 target_include_directories(EngineCore PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
     ${CMAKE_CURRENT_SOURCE_DIR}/../external 
-     ${CMAKE_CURRENT_SOURCE_DIR}/../external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp/include
+    
 )
 
 # Link hardware dependencies directly into your engine library
-target_link_libraries(EngineCore PUBLIC glfw glad)
+target_link_libraries(EngineCore PUBLIC glfw glad assimp)
 
 
 
