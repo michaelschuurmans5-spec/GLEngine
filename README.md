@@ -32,5 +32,15 @@ Texture class Wrapper stb library loader , shader layout location 1 pass UVs Tex
 <img width="690" height="642" alt="image" src="https://github.com/user-attachments/assets/3c39bacf-dc48-4167-a839-26802f18604f" />
 
 
+Vertices and indices cout increase , glEnable(GL_DEPTH_TEST_); inside OnAttach function GameLayer.cpp
+to help draw back facing sides or they will draw ontop of front facing sides tunring the cube inside out. 
+ALso OnRender function glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); this clears old depth and color
+and depth data per frame:
+
+<img width="582" height="470" alt="Recording Cube Snow Texture 2k " src="https://github.com/user-attachments/assets/6f4a9fb3-7135-4a12-a397-c3c668d17ea2" />
+
+
+
+
 
 

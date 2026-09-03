@@ -21,18 +21,28 @@ GameLayer::GameLayer() : Layer("GameSandboxLayer") {}
 void GameLayer::OnAttach() {
     ENGINE_INFO("GameLayer Attached! Reading assets from external GLSL Files...");
 
-    //  DYNAMIC DATA STRIDE
+    //  DYNAMIC 3D CUBE DATA STRIDE (X, Y, Z, U, V)
     float vertices[] = {
-        // Positions          // UVs (Texture Bounds Mapping Mapping)
-       -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, // 0: Bottom-Left corner of image
-        0.5f, -0.5f, 0.0f,   1.0f, 0.0f, // 1: Bottom-Right corner of image
-        0.5f,  0.5f, 0.0f,   1.0f, 1.0f, // 2: Top-Right corner of image
-       -0.5f,  0.5f, 0.0f,   0.0f, 1.0f  // 3: Top-Left corner of image
+        // Front Face
+        -0.5f, -0.5f,  0.5f,   0.0f, 0.0f, // 0: Bottom-Left
+         0.5f, -0.5f,  0.5f,   1.0f, 0.0f, // 1: Bottom-Right
+         0.5f,  0.5f,  0.5f,   1.0f, 1.0f, // 2: Top-Right
+        -0.5f,  0.5f,  0.5f,   0.0f, 1.0f, // 3: Top-Left
+
+        // Back Face
+        -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, // 4: Bottom-Left
+         0.5f, -0.5f, -0.5f,   0.0f, 0.0f, // 5: Bottom-Right
+         0.5f,  0.5f, -0.5f,   0.0f, 1.0f, // 6: Top-Right
+        -0.5f,  0.5f, -0.5f,   1.0f, 1.0f  // 7: Top-Left
     };
-    // INDEX MAP
+    // 3D INDEX MAP (Connects all 6 faces perfectly)
     uint32_t indices[] = {
-        0, 1, 2, // First Triangle: Bottom-Left -> Bottom-Right -> Top-Right
-        2, 3, 0  // Second Triangle: Top-Right -> Top-Left -> Bottom-Left
+        0, 1, 2,  2, 3, 0, // Front
+        1, 5, 6,  6, 2, 1, // Right
+        7, 6, 5,  5, 4, 7, // Back
+        4, 0, 3,  3, 7, 4, // Left
+        3, 2, 6,  6, 7, 3, // Top
+        4, 5, 1,  1, 0, 4  // Bottom
     };
 
     // ENGINE ASSET DIR MACRO 
@@ -48,7 +58,7 @@ void GameLayer::OnAttach() {
     // CONNECT THE BUFFER TO THIS ARRAY THIS SETS UP LAYOUT ATTRIBUTES INTERNALLY 
     m_VertexArray->AddVertexBuffer(m_VertexBuffer);
     // INDEX BUFFER 
-    m_IndexBuffer = std::make_shared<IndexBuffer>(indices, 6);
+    m_IndexBuffer = std::make_shared<IndexBuffer>(indices, 36);
     // BIND INDEX BUFFER LAYOUT CONFIG INTO MASTER SHADER VERTEX ARRAY OBJECT
     m_VertexArray->SetIndexBuffer(m_IndexBuffer);
 
@@ -77,6 +87,9 @@ void GameLayer::OnAttach() {
     // LOCK MOUSE POINTER INSIDE VIEWPORT KEEPS CURSOR INVISBLE AND CENTERED INSIDE SCREEN CANVAS WINDOW
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    // DEPTH BUFFER: z - buffer
+    glEnable(GL_DEPTH_TEST);
 }
 
 void GameLayer::OnUpdate() {
@@ -126,6 +139,9 @@ void GameLayer::OnUpdate() {
 
 }
 void GameLayer::OnRender() {
+    // CLEAR BOTH THE COLOR BUFFER AND THE DEPTH BUFFER AT THE START OF FRAME
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     // ACTIVATE OUR SHADER PROGRAM PIPELINE
     m_Shader->Bind();
     // BIND THE TEXTURE MAP TO HARDWARE SLOT 0 BEFORE DRAW CALL ISSUES 
