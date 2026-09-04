@@ -11,7 +11,7 @@ out vec3 v_FragPos;
 
 // create variables type u get mesh data store in uniform 
 uniform mat4 u_ViewProjection; // Camera data
-uniform mat4 u_Transform; // mesh data
+uniform mat4 u_Transform; // mesh transform data
 
 
 void main() {

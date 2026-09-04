@@ -118,6 +118,14 @@ void Shader::SetUniformFloat3(const std::string& name, const glm::vec3& vector) 
 	}
 	glUniform3fv(location, 1, glm::value_ptr(vector));
 }
+void Shader::SetUniformFloat2(const std::string& name, const glm::vec2& vector) {
+	int location = glGetUniformLocation(m_RendererID, name.c_str());
+	if (location == -1) {
+		ENGINE_WARN("Warning: Uniform '" + name + "' not found in shader source!");
+		return;
+	}
+	glUniform2fv(location, 1, glm::value_ptr(vector));
+}
 uint32_t Shader::CompileShader(unsigned int type,
 	const std::string& source) {
 	// GENERATE TEMPORARY SLOT FOR THIS SHADER STAGE

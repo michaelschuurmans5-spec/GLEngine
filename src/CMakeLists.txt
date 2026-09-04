@@ -22,6 +22,10 @@ set(ENGINE_SOURCES
     "engine/renderer/Camera.cpp"
     "engine/renderer/Texture.h"
     "engine/renderer/Texture.cpp"
+    "engine/renderer/Framebuffer.h"
+    "engine/renderer/Framebuffer.cpp"
+
+    # Resources 
     "engine/resources/ModelLoader.h"
     "engine/resources/ModelLoader.cpp"
 )
@@ -39,7 +43,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp ${CMAKE_CURRENT_
 
 
 # Compile the core engine as a static library
-add_library(EngineCore STATIC ${ENGINE_SOURCES})
+add_library(EngineCore STATIC ${ENGINE_SOURCES} "engine/renderer/Framebuffer.h" "engine/renderer/Framebuffer.cpp")
 
 
 # Expose include directories so files can find each other via clean paths
@@ -65,7 +69,7 @@ set(SANDBOX_SOURCES
 )
 
 # Create the final desktop executable 
-add_executable(SandboxApp ${SANDBOX_SOURCES})
+add_executable(SandboxApp ${SANDBOX_SOURCES} "engine/renderer/Framebuffer.h" "engine/renderer/Framebuffer.cpp")
 
 # Link your sandbox executable directly against your custom engine
 target_link_libraries(SandboxApp PRIVATE EngineCore)

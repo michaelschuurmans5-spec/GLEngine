@@ -46,5 +46,12 @@ using class wrapper ModelLoader, same snow text as cube:
 <img width="3790" height="1637" alt="image" src="https://github.com/user-attachments/assets/0b909e0c-ac9f-4e11-8201-1e4a95c0ef01" />
 
 
+Light source rays created using god rays vert and frag, 2D image processing tricks to make
+it look like its bleeding and stretching outwards from light source. Raymarching Screen Space Radial Blur
+it walks a line towards the lights screen position, samples the colors along that path and blends them together
+to create streaky glowing light trail:
+
+<img width="706" height="524" alt="Recording Basic Mesh Rigged Human   Cube God rays " src="https://github.com/user-attachments/assets/04719b34-e407-404a-8cef-28fb8885f43b" />
+
 
 
