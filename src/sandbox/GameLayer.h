@@ -21,10 +21,15 @@ public:
 	virtual void OnRender() override;
 private:
     // SMART POINTERS
-    std::unique_ptr<Shader> m_Shader;
+    std::unique_ptr<Shader> m_UnlitShader;
+    std::unique_ptr<Shader> m_LitShader;
     std::unique_ptr<Camera> m_Camera;
     std::unique_ptr<Texture> m_Texture;
 
+    // DEFINE BASIC LIGHT VARIABLES 
+    glm::vec3 LightPos = glm::vec3(2.0f, 4.0f, 3.0f);
+    glm::vec3 LightColor = glm::vec3(1.0f, 1.0f, 0.9f);
+ 
     // ENTITY 1: THE CUBE ASSETS
     std::shared_ptr<VertexArray> m_CubeVAO;
     std::shared_ptr<VertexBuffer> m_CubeVBO;

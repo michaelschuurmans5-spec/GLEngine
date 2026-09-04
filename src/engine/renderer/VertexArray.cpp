@@ -1,4 +1,5 @@
 #include "renderer/VertexArray.h"
+#include "renderer/Buffer.h"
 
 #include <glad/glad.h>
 
@@ -23,30 +24,32 @@ void VertexArray::AddVertexBuffer(const
 	// BIND THE SOURCE VERTEX BUFFER ASSET TO CONNECT THEM: translates data
 	vertexBuffer->Bind();
 
-	// TOTAL LAYOUT  STRIDE GAP = 5 FLOATS : 3 positions & 2 for UVs
-	uint32_t strideSize = 5 * sizeof(float);
+	const auto& layout = vertexBuffer->GetLayout();
+	uint32_t elementIndex = 0;
 
-	// POSITION ATTRIBUTE (Slot location index 0 - vec3)
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(
-		0,     // Attribute index location 0 (matches 'layout (location = 0)' in shader)
-		3,     // Component count per vertex attribute (X, Y, Z coordinates = 3 floats)
-		GL_FLOAT,  // Data type
-		GL_FALSE,  //  Normalized flag
-		strideSize, //  jump gap to reach the next vertex coordinate (5 floats)
-		(void*)0  // Starts right at byte location zero
-	);
+	for (const auto& element : layout.GetElements()) {
 
-	// TEXTURE COORD ATTRIBUTE (Slot location index 1 - vec2)
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(
-		1,
-		2, // U, V coordinates
-		GL_FLOAT,
-		GL_FALSE,
-		strideSize,
-		(void*)(3 * sizeof(float)) // NEW STRIDE OFFSET: Skips the 3 position floats to find UV bytes!
-	);
+		// Helper map to convert your enum to active OpenGL types
+		GLenum glType = GL_FLOAT;
+		int componentCount = 0;
+		if (element.Type == ShaderDataType::Float)  componentCount = 1;
+		if (element.Type == ShaderDataType::Float2) componentCount = 2;
+		if (element.Type == ShaderDataType::Float3) componentCount = 3;
+		if (element.Type == ShaderDataType::Float4) componentCount = 4;
+
+		glEnableVertexAttribArray(elementIndex);
+
+		glVertexAttribPointer(
+			elementIndex,
+			componentCount,
+			glType,
+			GL_FALSE,
+			layout.GetStride(),
+			(void*)(uintptr_t)element.Offset
+		);
+		elementIndex++;
+	}
+
 }
 // LINK INDEX BUFFER OBJECT TO THIS VERTEX ARRAY STATE MAP
 void VertexArray::SetIndexBuffer(const std::shared_ptr<IndexBuffer>& indexBuffer) {

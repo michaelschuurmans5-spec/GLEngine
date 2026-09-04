@@ -45,6 +45,13 @@ void GameLayer::OnAttach() {
 
     m_CubeVAO = std::make_shared<VertexArray>();
     m_CubeVBO = std::make_shared<VertexBuffer>(cubeVertices, (uint32_t)sizeof(cubeVertices));
+
+    //Explicitly declare layout
+    m_CubeVBO->SetLayout({
+       { ShaderDataType::Float3, "aPos" },
+       { ShaderDataType::Float2, "aTexCoord" }
+    });
+
     m_CubeVAO->AddVertexBuffer(m_CubeVBO);
     m_CubeEBO = std::make_shared<IndexBuffer>(cubeIndices, 36);
     m_CubeVAO->SetIndexBuffer(m_CubeEBO);
@@ -57,7 +64,16 @@ void GameLayer::OnAttach() {
         m_HumanIndexCount = (uint32_t)humanData.Indices.size();
 
         m_HumanVAO = std::make_shared<VertexArray>();
-        m_HumanVBO = std::make_shared<VertexBuffer>((float*)humanData.Vertices.data(), (uint32_t)(humanData.Vertices.size() * sizeof(ModelVertex)));
+        m_HumanVBO = std::make_shared<VertexBuffer>((float*)humanData.Vertices.data()
+            , (uint32_t)(humanData.Vertices.size() * sizeof(ModelVertex)));
+
+        // Explicitly declare layout
+        m_HumanVBO->SetLayout({
+        { ShaderDataType::Float3, "aPos" },
+        { ShaderDataType::Float2, "aTexCoord" },
+        { ShaderDataType::Float3, "aNormal" }
+        });
+
         m_HumanVAO->AddVertexBuffer(m_HumanVBO);
         m_HumanEBO = std::make_shared<IndexBuffer>(humanData.Indices.data(), m_HumanIndexCount);
         m_HumanVAO->SetIndexBuffer(m_HumanEBO);
@@ -67,16 +83,19 @@ void GameLayer::OnAttach() {
     }
 
     // CORE ASSETS INITIALIZATION
-    std::string vertPath = std::string(ENGINE_ASSET_DIR) + "Shaders/basic.vert";
-    std::string fragPath = std::string(ENGINE_ASSET_DIR) + "Shaders/basic.frag";
-    m_Shader = std::make_unique<Shader>(vertPath, fragPath);
+    std::string staticVert = std::string(ENGINE_ASSET_DIR) + "Shaders/VertexDeformation/static.vert";
+    std::string unlitFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/unlit.frag";
+    std::string litFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/forward_lit.frag";
+
+    m_UnlitShader = std::make_unique<Shader>(staticVert, unlitFrag);
+    m_LitShader = std::make_unique<Shader>(staticVert, litFrag);
 
     std::string texPath = std::string(ENGINE_ASSET_DIR) + "Textures/Snow/Snow010A_2K-PNG_Color.png";
     m_Texture = std::make_unique<Texture>(texPath);
 
-    m_Shader->Bind();
-    int location = glGetUniformLocation(m_Shader->GetRendererID(), "u_Texture");
-    if (location != -1) glUniform1i(location, 0);
+    m_UnlitShader->Bind();
+    int unlitTexLoc= glGetUniformLocation(m_UnlitShader->GetRendererID(), "u_Texture");
+    if (unlitTexLoc != -1) glUniform1i(unlitTexLoc, 0);
 
     m_Camera = std::make_unique<Camera>(80.0f, 1.6f, 0.1f, 100.0f);
     m_Camera->SetPosition(s_CameraPos);
@@ -123,32 +142,40 @@ void GameLayer::OnUpdate() {
 void GameLayer::OnRender() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    m_Shader->Bind();
+    // DRAW STEP 1: RENDER THE UNLIT CUBE ENTITY
     m_Texture->Bind(0);
+    m_UnlitShader->Bind();
+    m_UnlitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
 
- 
-    m_Shader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
-
-  
-    // DRAW STEP 1: RENDER THE CUBE ENTITY
     glm::mat4 cubeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f));
-    m_Shader->SetUniformMat4("u_Transform", cubeTransform);
+    m_UnlitShader->SetUniformMat4("u_Transform", cubeTransform);
 
     m_CubeVAO->Bind();
     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
 
-    // DRAW STEP 2: RENDER THE BLENDER HUMAN ENTITY
+    // DRAW STEP 2: RENDER THE LIT HUMAN ENTITY
     if (m_HumanVAO) {
-    
+        m_LitShader->Bind();
+        m_LitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
+
         glm::mat4 humanTransform = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -0.5f, 0.0f));
-        m_Shader->SetUniformMat4("u_Transform", humanTransform);
+        m_LitShader->SetUniformMat4("u_Transform", humanTransform);
+
+        // PASS LIGHTING DATA TO GPU
+        glm::vec3 lightPos = glm::vec3(3.0f, 5.0f, 4.0f);
+        glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+
+        // Pass Lighting and Camera positions for Fragment calculations
+        m_LitShader->SetUniformFloat3("u_LightPos", LightPos);
+        m_LitShader->SetUniformFloat3("u_LightColor", LightColor);
+        m_LitShader->SetUniformFloat3("u_ViewPos", m_Camera->GetPosition());
 
         m_HumanVAO->Bind();
         glDrawElements(GL_TRIANGLES, m_HumanIndexCount, GL_UNSIGNED_INT, nullptr);
     }
 
     m_CubeVAO->Unbind(); 
-    m_Shader->Unbind();
+    m_LitShader->Unbind();
 }
 
 void GameLayer::OnDetach() {

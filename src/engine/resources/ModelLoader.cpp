@@ -30,7 +30,7 @@ bool ModelLoader::LoadMesh(const std::string& filepath, LoadedMeshData& outData)
     // ALLOCATE MEMORY 
     outData.Vertices.reserve(mesh->mNumVertices);
 
-    // EXTRACT VERTEX ATTRIBUTES(X, Y, Z + U, V)
+    // EXTRACT VERTEX ATTRIBUTES(X, Y, Z + U, V + NORMALS)
     for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
         ModelVertex vertex;
 
@@ -46,6 +46,15 @@ bool ModelLoader::LoadMesh(const std::string& filepath, LoadedMeshData& outData)
         }
         else {
             vertex.TexCoords = glm::vec2(0.0f, 0.0f);
+        }
+
+        if (mesh->HasNormals()) {
+            vertex.Normal.x = mesh->mNormals[i].x;
+            vertex.Normal.y = mesh->mNormals[i].y;
+            vertex.Normal.z = mesh->mNormals[i].z;
+        }
+        else {
+            vertex.Normal = glm::vec3(0.0f, 1.0f, 0.0f); // Default pointing straight up
         }
 
         // PACKS MESH DATA TO VERTEX

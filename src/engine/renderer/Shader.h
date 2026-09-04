@@ -17,6 +17,7 @@ public:
 	// UTILITY FUNCTION CHANGE YOUR FRAGMENT COLOR IN REAL TIME 
 	void SetUniform4f(const std::string& name, float v0, float v1, float v2, float v3);
 	void SetUniformMat4(const std::string& name, const glm::mat4& matrix);
+	void SetUniformFloat3(const std::string& name, const glm::vec3& vector);
 
 	// GETTERS
 	uint32_t GetRendererID() const { return m_RendererID; }

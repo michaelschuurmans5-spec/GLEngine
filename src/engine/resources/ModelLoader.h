@@ -8,6 +8,7 @@
 struct ModelVertex {
     glm::vec3 Position;
     glm::vec2 TexCoords;
+    glm::vec3 Normal;
 };
 // HOLD FINAL COMPILED MESH ARRAYS
 struct LoadedMeshData {

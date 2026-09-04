@@ -109,6 +109,15 @@ void Shader::SetUniformMat4(const std::string& name, const glm::mat4& matrix)
 	
 	glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
 }
+void Shader::SetUniformFloat3(const std::string& name, const glm::vec3& vector) {
+	int location = glGetUniformLocation(m_RendererID, name.c_str());
+	if (location == -1) {
+		// Keeps track of unused or optimized out lighting variables
+		ENGINE_WARN("Warning: Uniform '" + name + "' not found in shader source!");
+		return;
+	}
+	glUniform3fv(location, 1, glm::value_ptr(vector));
+}
 uint32_t Shader::CompileShader(unsigned int type,
 	const std::string& source) {
 	// GENERATE TEMPORARY SLOT FOR THIS SHADER STAGE
