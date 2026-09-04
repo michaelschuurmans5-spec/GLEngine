@@ -19,6 +19,8 @@ public:
 	void SetUniformMat4(const std::string& name, const glm::mat4& matrix);
 	void SetUniformFloat3(const std::string& name, const glm::vec3& vector);
 	void SetUniformFloat2(const std::string& name, const glm::vec2& vector);
+	void SetUniformInt(const std::string& name, int value);
+	void SetUniformFloat(const std::string& name, float value);
 
 	// GETTERS
 	uint32_t GetRendererID() const { return m_RendererID; }

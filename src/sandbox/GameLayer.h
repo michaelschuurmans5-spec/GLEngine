@@ -50,4 +50,13 @@ private:
     uint32_t m_ViewportWidth = 800;
     uint32_t m_ViewportHeight = 600;
 
+    // SUN VARIABLES 
+    float m_TimeOfDay = 0.0f; // Tracks our day/night cycle clock
+    glm::vec3 m_DynamicSunDir = glm::vec3(0.0f, 1.0f, 0.0f); // The current 3D direction pointing toward the sun
+    
+
+    // SKY ELEMENTS
+    std::unique_ptr<Shader> m_SkyShader; 
+    std::shared_ptr<VertexArray> m_SkyboxVAO;
+    std::shared_ptr<VertexBuffer> m_SkyboxVBO;
 };

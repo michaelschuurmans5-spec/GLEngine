@@ -35,7 +35,10 @@ Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath) {
 	// CHECK FOR LINKING ERRORS 
 	int isLinked = 0;
 	glGetProgramiv(m_RendererID, GL_LINK_STATUS, &isLinked);
-	if (isLinked == GL_FALSE) {
+	if (isLinked == GL_TRUE) {
+		ENGINE_INFO("Shader compiled and linked successfully! [Vert: "
+			+ vertexPath + " | Frag: " + fragmentPath + "]");
+	}else{
 		int maxLength = 0;
 		glGetProgramiv(m_RendererID, GL_INFO_LOG_LENGTH, &maxLength);
 
@@ -126,6 +129,28 @@ void Shader::SetUniformFloat2(const std::string& name, const glm::vec2& vector) 
 	}
 	glUniform2fv(location, 1, glm::value_ptr(vector));
 }
+void Shader::SetUniformInt(const std::string& name, int value) {
+	// Look up where this variable sits inside the compiled GPU binary memory
+	int location = glGetUniformLocation(m_RendererID, name.c_str());
+
+	if (location == -1) {
+		// Keeps track of variables that don't exist or were optimized out by the driver
+		ENGINE_WARN("Warning: Integer uniform '" + name + "' not found in shader source!");
+		return;
+	}
+
+	// Upload the integer value directly to that GPU register slot
+	glUniform1i(location, value);
+}
+void Shader::SetUniformFloat(const std::string& name, float value) {
+	int location = glGetUniformLocation(m_RendererID, name.c_str());
+	if (location == -1) {
+		ENGINE_WARN("Warning: Float uniform '" + name + "' not found in shader source!");
+		return;
+	}
+	glUniform1f(location, value); // Calls 1f for single floats
+}
+
 uint32_t Shader::CompileShader(unsigned int type,
 	const std::string& source) {
 	// GENERATE TEMPORARY SLOT FOR THIS SHADER STAGE

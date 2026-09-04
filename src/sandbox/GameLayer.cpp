@@ -131,6 +131,64 @@ void GameLayer::OnAttach() {
     int screenTexLoc = glGetUniformLocation(m_GodRayShader->GetRendererID(), "u_ScreenTexture");
     if (screenTexLoc != -1) glUniform1i(screenTexLoc, 0);
 
+    // SKY
+    float skyboxVertices[] = {
+        // Positions          
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f
+    };
+    // SKY PATHS
+    std::string skyVert = std::string(ENGINE_ASSET_DIR) + "Shaders/VertexDeformation/sky.vert";
+    std::string skyFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/sky.frag";
+    m_SkyShader = std::make_unique<Shader>(skyVert, skyFrag);
+    // ARRAY & BUFFERS
+    m_SkyboxVAO = std::make_shared<VertexArray>();
+    m_SkyboxVBO = std::make_shared<VertexBuffer>(skyboxVertices, (uint32_t)sizeof(skyboxVertices));
+    // LAYOUT 
+    m_SkyboxVBO->SetLayout({
+    { ShaderDataType::Float3, "aPos" }
+        });
+    m_SkyboxVAO->AddVertexBuffer(m_SkyboxVBO);
+
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glEnable(GL_DEPTH_TEST);
@@ -167,7 +225,17 @@ void GameLayer::OnUpdate() {
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) s_CameraPos -= m_Camera->GetRightVector() * s_CameraMoveSpeed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) s_CameraPos += m_Camera->GetRightVector() * s_CameraMoveSpeed;
 
+    // SUN
+    // INCREMENT OUR CYCLE CLOCK ADJUST TIME OF DAY 
+    m_TimeOfDay += 0.1f * s_CameraMoveSpeed;
+    // Calculate the Sun Direction vector spinning on a circular arc (X and Y axis)
+    m_DynamicSunDir.x = cos(m_TimeOfDay);
+    m_DynamicSunDir.y = sin(m_TimeOfDay); // Moves up and down (Sunrise -> Noon -> Sunset -> Night)
+    m_DynamicSunDir.z = -0.5f;            // Slight tilt back so it shines on the front of our assets
+    m_DynamicSunDir = glm::normalize(m_DynamicSunDir);
+
     m_Camera->SetPosition(s_CameraPos);
+
 }
 
 void GameLayer::OnRender() {
@@ -188,8 +256,8 @@ void GameLayer::OnRender() {
 
         // Update your Camera's internal 3D perspective mapping calculations
         float aspect = (float)m_ViewportWidth / (float)m_ViewportHeight;
-        m_Camera = std::make_unique<Camera>(80.0f, aspect, 0.1f, 100.0f); //
-        m_Camera->SetPosition(s_CameraPos); //
+        m_Camera = std::make_unique<Camera>(80.0f, aspect, 0.1f, 100.0f); 
+        m_Camera->SetPosition(s_CameraPos);
     }
 
     //  PASS 1: RENDER STANDARD GAME SCENE INTO THE FRAMEBUFFER
@@ -197,9 +265,22 @@ void GameLayer::OnRender() {
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Dark background helps rays pop!
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    m_Texture->Bind(0);
-    // Render Unlit Cube
+    // SUB-STEP: RENDER THE PROCEDURAL SKYBOX BACKGROUND
+    glDepthFunc(GL_LEQUAL);
+    m_SkyShader->Bind();
+    // Stripping out position vectors from your View matrix so the skybox centers on the camera view path
+    glm::mat4 skyViewMatrix = glm::mat4(glm::mat3(m_Camera->GetViewMatrix()));
+    glm::mat4 skyViewProj = m_Camera->GetProjectionMatrix() * skyViewMatrix;
+    m_SkyShader->SetUniformMat4("u_ViewProjection", skyViewProj);
+    m_SkyShader->SetUniformFloat3("u_DynamicSunDir", m_DynamicSunDir);
+    m_SkyShader->SetUniformFloat("u_Time", m_TimeOfDay);
 
+    m_SkyboxVAO->Bind();
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glDepthFunc(GL_LESS);
+
+    // Cube & MESH 
+    m_Texture->Bind(0);
     m_UnlitShader->Bind();
     m_UnlitShader->SetUniformMat4("u_ViewProjection",
         m_Camera->GetViewProjectionMatrix());
@@ -218,7 +299,19 @@ void GameLayer::OnRender() {
             glm::vec3(1.0f, -0.5f, 0.0f));
         m_LitShader->SetUniformMat4("u_Transform", humanTransform);
 
-        // PASS LIGHTING DATA TO GPU
+        // LIGHTING (SUN) 
+        glm::vec3 dynamicLightPos = m_DynamicSunDir * 50.0f;
+        // CHANGE SUN COLOR BASED ON HEIGHT
+        glm::vec3 dynamicLightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+        if (m_DynamicSunDir.y < 0.2f && m_DynamicSunDir.y > 0.0f) {
+            // Golden Hour / Sunset: Blend to a warm orange/red sun
+            dynamicLightColor = glm::vec3(1.0f, 0.5f, 0.2f);
+        }
+        else if (m_DynamicSunDir.y <= 0.0f) {
+            // Night time: Turn the sun off completely! (Dim blue ambient moonlight)
+            dynamicLightColor = glm::vec3(0.05f, 0.05f, 0.1f);
+        }
+        // Upload the dynamic, moving properties to the GPU
         glm::vec3 lightPos = glm::vec3(3.0f, 5.0f, 4.0f);
         glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
         // Pass Lighting and Camera positions for Fragment calculations
@@ -240,11 +333,14 @@ void GameLayer::OnRender() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Calculate the light's 2D Screen Position
-        glm::vec3 lightWorldPos = glm::vec3(3.0f, 5.0f, 4.0f);
-        glm::vec4 clipSpacePos = m_Camera->GetViewProjectionMatrix()
-            * glm::vec4(lightWorldPos, 1.0f);
+    // dynamic far-away sun coordinate position for screen projection
+    glm::vec3 sunWorldPos = m_DynamicSunDir * 50.0f;
+    glm::vec4 clipSpacePos = m_Camera->GetViewProjectionMatrix() * glm::vec4(sunWorldPos, 1.0f);
+
+    // CHECK: Only process god rays if the sun is in front of the camera view frustum
+    if (clipSpacePos.w > 0.0f) {
         glm::vec3 ndcPos = glm::vec3(clipSpacePos) / clipSpacePos.w;
+
         glm::vec2 lightScreenPos;
         lightScreenPos.x = (ndcPos.x + 1.0f) * 0.5f;
         lightScreenPos.y = (ndcPos.y + 1.0f) * 0.5f;
@@ -253,9 +349,12 @@ void GameLayer::OnRender() {
         m_GodRayShader->Bind();
         m_GodRayShader->SetUniformFloat2("u_LightScreenPos", lightScreenPos);
 
+        // Adjust the intensity uniform dynamically so rays fade out when the sun sets below the horizon
+        float sunsetExposureFactor = glm::clamp(m_DynamicSunDir.y, 0.0f, 1.0f);
+        m_GodRayShader->SetUniformFloat("u_Exposure", sunsetExposureFactor * 0.3f);
+    }
         // Bind the color canvas texture we generated in Pass 1 into slot 0
         glBindTexture(GL_TEXTURE_2D, m_Framebuffer->GetColorAttachmentRendererID());
-
         // Draw the full screen billboard quad to apply the raymarching effect
         m_ScreenQuadVAO->Bind();
         glDrawArrays(GL_TRIANGLES, 0, 6);
