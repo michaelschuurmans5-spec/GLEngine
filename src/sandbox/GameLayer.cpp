@@ -3,6 +3,8 @@
 #include "core/Application.h" 
 #include "renderer/Camera.h" 
 #include "resources/ModelLoader.h" 
+#include "resources/AssetManager.h"
+
 #include <glad/glad.h>
 #include <glfw/glfw3.h>
 #include <cmath>
@@ -89,12 +91,12 @@ void GameLayer::OnAttach() {
     std::string godRayVert = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/god_rays.vert";
     std::string godRayFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/god_rays.frag";
 
-    m_UnlitShader = std::make_unique<Shader>(staticVert, unlitFrag);
-    m_LitShader = std::make_unique<Shader>(staticVert, litFrag);
-    m_GodRayShader = std::make_unique<Shader>(godRayVert, godRayFrag);
+    m_UnlitShader = AssetManager::GetShader(staticVert, unlitFrag);
+    m_LitShader = AssetManager::GetShader(staticVert, litFrag);
+    m_GodRayShader = AssetManager::GetShader(godRayVert, godRayFrag);
 
     std::string texPath = std::string(ENGINE_ASSET_DIR) + "Textures/Snow/Snow010A_2K-PNG_Color.png";
-    m_Texture = std::make_unique<Texture>(texPath);
+    m_Texture = AssetManager::GetTexture(texPath);
 
     m_UnlitShader->Bind();
     int unlitTexLoc= glGetUniformLocation(m_UnlitShader->GetRendererID(), "u_Texture");
@@ -179,7 +181,7 @@ void GameLayer::OnAttach() {
     // SKY PATHS
     std::string skyVert = std::string(ENGINE_ASSET_DIR) + "Shaders/VertexDeformation/sky.vert";
     std::string skyFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/sky.frag";
-    m_SkyShader = std::make_unique<Shader>(skyVert, skyFrag);
+    m_SkyShader = AssetManager::GetShader(skyVert, skyFrag);
     // ARRAY & BUFFERS
     m_SkyboxVAO = std::make_shared<VertexArray>();
     m_SkyboxVBO = std::make_shared<VertexBuffer>(skyboxVertices, (uint32_t)sizeof(skyboxVertices));

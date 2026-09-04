@@ -22,11 +22,11 @@ public:
     virtual void OnRender() override;
 private:
     // SMART POINTERS
-    std::unique_ptr<Shader> m_UnlitShader;
-    std::unique_ptr<Shader> m_LitShader;
-    std::unique_ptr<Shader> m_GodRayShader;
+    std::shared_ptr<Shader> m_UnlitShader;
+    std::shared_ptr<Shader> m_LitShader;
+    std::shared_ptr<Shader> m_GodRayShader;
     std::unique_ptr<Camera> m_Camera;
-    std::unique_ptr<Texture> m_Texture;
+    std::shared_ptr<Texture> m_Texture;
     std::unique_ptr<Framebuffer> m_Framebuffer;
     std::shared_ptr<VertexArray> m_ScreenQuadVAO;
     std::shared_ptr<VertexBuffer> m_ScreenQuadVBO;
@@ -56,7 +56,7 @@ private:
     
 
     // SKY ELEMENTS
-    std::unique_ptr<Shader> m_SkyShader; 
+    std::shared_ptr<Shader> m_SkyShader; 
     std::shared_ptr<VertexArray> m_SkyboxVAO;
     std::shared_ptr<VertexBuffer> m_SkyboxVBO;
 };
