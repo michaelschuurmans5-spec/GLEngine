@@ -12,13 +12,18 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+
 static glm::vec3 s_CameraPos = glm::vec3(0.0f, 1.0f, 4.0f); 
 static float s_CameraMoveSpeed = 0.04f;
 
 static double s_LastX = 400.0, s_LastY = 300.0;
 static bool s_FirstMouse = true;
 
-GameLayer::GameLayer() : Layer("GameSandboxLayer") {}
+GameLayer::GameLayer() : Layer("GameSandboxLayer"),
+m_GodRayExposureOverride(0.3f) {}
 
 void GameLayer::OnAttach() {
     ENGINE_INFO("GameLayer Attached! Loading Multi-Entity 3D Scene...");
@@ -194,15 +199,64 @@ void GameLayer::OnAttach() {
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glEnable(GL_DEPTH_TEST);
+
+    // INITIALIZE DEAR IMGUI BACKENDS
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable arrow keys in menus
+
+    ImGui::StyleColorsDark(); // Sleek dark mode styling
+
+    // Init context bindings matching your GLAD pipeline version
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 410");
 }
 
-void GameLayer::OnUpdate() {
+void GameLayer::OnUpdate(float delaTime) {
+
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
 
+    // SMART LATCH: Remembers its value across frames to prevent multi-triggering
+    static bool s_F2KeyPressedLastFrame = false;
+    bool isF2PressedNow = (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS);
+
+    // PRESS F2 TO FLIP ENGINE MODE AT RUNTIME
+    if (isF2PressedNow && !s_F2KeyPressedLastFrame) {
+        if (Application::Get().GetMode() == AppMode::Game) {
+            Application::Get().SetMode(AppMode::Editor);
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); // Free cursor for panel sliders
+        }
+        else {
+            Application::Get().SetMode(AppMode::Game);
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // Lock cursor back down for gameplay
+        }
+    }
+    s_F2KeyPressedLastFrame = isF2PressedNow;
+
+    // GATED SIMULATION (Only ticks simulation logic in Game mode)
+    if (Application::Get().GetMode() == AppMode::Game) {
+        m_TimeOfDay += 0.1f * s_CameraMoveSpeed;
+    }
+
+    // UNGATED VIEWPORT MOVEMENT (Runs in both Game & Editor modes)
+    // WASD Fly controls are now universally accessible [1]
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) s_CameraPos += s_CameraMoveSpeed * m_Camera->GetFrontVector();
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) s_CameraPos -= s_CameraMoveSpeed * m_Camera->GetFrontVector();
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) s_CameraPos -= m_Camera->GetRightVector() * s_CameraMoveSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) s_CameraPos += m_Camera->GetRightVector() * s_CameraMoveSpeed;
+
+    // CONTINUOUS VECTOR GENERATION (Always runs so ImGui slider reacts instantly)
+    m_DynamicSunDir.x = cos(m_TimeOfDay);
+    m_DynamicSunDir.y = sin(m_TimeOfDay);
+    m_DynamicSunDir.z = -0.5f;
+    m_DynamicSunDir = glm::normalize(m_DynamicSunDir);
+
+    // Track mouse coordinates over screen area
     double mouseX, mouseY;
     glfwGetCursorPos(window, &mouseX, &mouseY);
 
@@ -218,26 +272,28 @@ void GameLayer::OnUpdate() {
     s_LastX = mouseX;
     s_LastY = mouseY;
 
-    if (glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
+    // CONTEXTUAL CAMERA LOOK ROTATION
+
+    bool isGameMode = (Application::Get().GetMode() == AppMode::Game);
+    bool isRightClickHeld = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+
+    // Look around automatically in Game Mode, OR if holding Right-Click in Editor Mode! [1]
+    if (isGameMode || isRightClickHeld) {
+        // If we are in the Editor and holding Right-Click, hide the cursor so we can look freely [1]
+        if (!isGameMode) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
+
         m_Camera->ProcessMouseMovement(xOffset, yOffset);
     }
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) s_CameraPos += s_CameraMoveSpeed * m_Camera->GetFrontVector();
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) s_CameraPos -= s_CameraMoveSpeed * m_Camera->GetFrontVector();
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) s_CameraPos -= m_Camera->GetRightVector() * s_CameraMoveSpeed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) s_CameraPos += m_Camera->GetRightVector() * s_CameraMoveSpeed;
-
-    // SUN
-    // INCREMENT OUR CYCLE CLOCK ADJUST TIME OF DAY 
-    m_TimeOfDay += 0.1f * s_CameraMoveSpeed;
-    // Calculate the Sun Direction vector spinning on a circular arc (X and Y axis)
-    m_DynamicSunDir.x = cos(m_TimeOfDay);
-    m_DynamicSunDir.y = sin(m_TimeOfDay); // Moves up and down (Sunrise -> Noon -> Sunset -> Night)
-    m_DynamicSunDir.z = -0.5f;            // Slight tilt back so it shines on the front of our assets
-    m_DynamicSunDir = glm::normalize(m_DynamicSunDir);
+    else {
+        // If we let go of Right-Click in Editor Mode, give the mouse back to ImGui [1]
+        if (!isGameMode && glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        }
+    }
 
     m_Camera->SetPosition(s_CameraPos);
-
 }
 
 void GameLayer::OnRender() {
@@ -258,17 +314,20 @@ void GameLayer::OnRender() {
 
         // Update your Camera's internal 3D perspective mapping calculations
         float aspect = (float)m_ViewportWidth / (float)m_ViewportHeight;
-        m_Camera = std::make_unique<Camera>(80.0f, aspect, 0.1f, 100.0f); 
+        m_Camera = std::make_unique<Camera>(80.0f, aspect, 0.1f, 1000.0f); // FIXED: Increased far clip to 1000.0f to avoid mesh clipping
         m_Camera->SetPosition(s_CameraPos);
     }
 
-    //  PASS 1: RENDER STANDARD GAME SCENE INTO THE FRAMEBUFFER
+    // PASS 1: RENDER STANDARD GAME SCENE INTO THE FRAMEBUFFER
     m_Framebuffer->Bind();
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Dark background helps rays pop!
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // SUB-STEP: RENDER THE PROCEDURAL SKYBOX BACKGROUND
+    // Disable depth mask writing so skybox acts as a true background canvas layer
+    glDepthMask(GL_FALSE); 
     glDepthFunc(GL_LEQUAL);
+    
     m_SkyShader->Bind();
     // Stripping out position vectors from your View matrix so the skybox centers on the camera view path
     glm::mat4 skyViewMatrix = glm::mat4(glm::mat3(m_Camera->GetViewMatrix()));
@@ -279,58 +338,50 @@ void GameLayer::OnRender() {
 
     m_SkyboxVAO->Bind();
     glDrawArrays(GL_TRIANGLES, 0, 36);
+    
+    // Re-enable depth mask writing so standard 3D meshes can use depth sorting safely
+    glDepthMask(GL_TRUE); 
     glDepthFunc(GL_LESS);
 
-    // Cube & MESH 
+    // SUB-STEP: RENDER 3D MESHES (Cube & Human)
     m_Texture->Bind(0);
     m_UnlitShader->Bind();
-    m_UnlitShader->SetUniformMat4("u_ViewProjection",
-        m_Camera->GetViewProjectionMatrix());
-    glm::mat4 cubeTransform = glm::translate(glm::mat4(1.0f),
-        glm::vec3(-1.5f, 0.0f, 0.0f));
+    m_UnlitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
+    glm::mat4 cubeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f));
     m_UnlitShader->SetUniformMat4("u_Transform", cubeTransform);
     m_CubeVAO->Bind();
     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
 
-    //  Render Lit Human
+    // Render Lit Human
     if (m_HumanVAO) {
         m_LitShader->Bind();
-        m_LitShader->SetUniformMat4("u_ViewProjection",
-            m_Camera->GetViewProjectionMatrix());
-        glm::mat4 humanTransform = glm::translate(glm::mat4(1.0f),
-            glm::vec3(1.0f, -0.5f, 0.0f));
+        m_LitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
+        glm::mat4 humanTransform = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -0.5f, 0.0f));
         m_LitShader->SetUniformMat4("u_Transform", humanTransform);
 
         // LIGHTING (SUN) 
         glm::vec3 dynamicLightPos = m_DynamicSunDir * 50.0f;
-        // CHANGE SUN COLOR BASED ON HEIGHT
         glm::vec3 dynamicLightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+
         if (m_DynamicSunDir.y < 0.2f && m_DynamicSunDir.y > 0.0f) {
-            // Golden Hour / Sunset: Blend to a warm orange/red sun
             dynamicLightColor = glm::vec3(1.0f, 0.5f, 0.2f);
         }
         else if (m_DynamicSunDir.y <= 0.0f) {
-            // Night time: Turn the sun off completely! (Dim blue ambient moonlight)
             dynamicLightColor = glm::vec3(0.05f, 0.05f, 0.1f);
         }
-        // Upload the dynamic, moving properties to the GPU
-        glm::vec3 lightPos = glm::vec3(3.0f, 5.0f, 4.0f);
-        glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+        
         // Pass Lighting and Camera positions for Fragment calculations
-        m_LitShader->SetUniformFloat3("u_LightPos", LightPos);
-        m_LitShader->SetUniformFloat3("u_LightColor", LightColor);
+        m_LitShader->SetUniformFloat3("u_LightPos", dynamicLightPos);     // FIXED: Using variable matching case
+        m_LitShader->SetUniformFloat3("u_LightColor", dynamicLightColor); // FIXED: Using variable matching case
         m_LitShader->SetUniformFloat3("u_ViewPos", m_Camera->GetPosition());
 
         m_HumanVAO->Bind();
         glDrawElements(GL_TRIANGLES, m_HumanIndexCount, GL_UNSIGNED_INT, nullptr);
-
     }
 
-    m_Framebuffer->Unbind();// Stop rendering to the Framebuffer texture target
+    m_Framebuffer->Unbind(); // Stop rendering to the Framebuffer texture target
 
     // PASS 2: RENDER POST-PROCESSING GOD RAYS TO THE SCREEN
-
-      // Clear your physical screen monitor canvas 
     glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -340,35 +391,70 @@ void GameLayer::OnRender() {
     glm::vec4 clipSpacePos = m_Camera->GetViewProjectionMatrix() * glm::vec4(sunWorldPos, 1.0f);
 
     // CHECK: Only process god rays if the sun is in front of the camera view frustum
+    m_GodRayShader->Bind();
     if (clipSpacePos.w > 0.0f) {
         glm::vec3 ndcPos = glm::vec3(clipSpacePos) / clipSpacePos.w;
-
         glm::vec2 lightScreenPos;
         lightScreenPos.x = (ndcPos.x + 1.0f) * 0.5f;
         lightScreenPos.y = (ndcPos.y + 1.0f) * 0.5f;
-
-        // Bind the God Ray shader and assign variables
-        m_GodRayShader->Bind();
         m_GodRayShader->SetUniformFloat2("u_LightScreenPos", lightScreenPos);
-
-        // Adjust the intensity uniform dynamically so rays fade out when the sun sets below the horizon
-        float sunsetExposureFactor = glm::clamp(m_DynamicSunDir.y, 0.0f, 1.0f);
-        m_GodRayShader->SetUniformFloat("u_Exposure", sunsetExposureFactor * 0.3f);
-    }
-        // Bind the color canvas texture we generated in Pass 1 into slot 0
-        glBindTexture(GL_TEXTURE_2D, m_Framebuffer->GetColorAttachmentRendererID());
-        // Draw the full screen billboard quad to apply the raymarching effect
-        m_ScreenQuadVAO->Bind();
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        // Cleanup Pipeline State
-        m_ScreenQuadVAO->Unbind();
-        m_GodRayShader->Unbind();
         
-        m_CubeVAO->Unbind(); 
-        m_LitShader->Unbind();
+        // Adjust intensity uniform dynamically based on mode
+        float exposure = (Application::Get().GetMode() == AppMode::Game)
+                         ? (glm::clamp(m_DynamicSunDir.y, 0.0f, 1.0f) * 0.3f) // Auto-fading at night
+                         : m_GodRayExposureOverride;                          // ImGui Slider control
+                         
+        m_GodRayShader->SetUniformFloat("u_Exposure", exposure);
+    }
+    else {
+        m_GodRayShader->SetUniformFloat("u_Exposure", 0.0f);
+    }
+    
+    // Bind the color canvas texture we generated in Pass 1 into slot 0
+    glActiveTexture(GL_TEXTURE0); // Explicitly ensure we are targeted on Texture Slot 0
+    glBindTexture(GL_TEXTURE_2D, m_Framebuffer->GetColorAttachmentRendererID());
+    
+    // Draw the full screen billboard quad to apply the raymarching effect
+    m_ScreenQuadVAO->Bind();
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // PASS 3: IMGUI TOOL DRAWS (LAYERED OVER POST-PROCESSING)
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    if (Application::Get().GetMode() == AppMode::Editor) {
+        ImGui::Begin("Atmosphere Control Workspace");
+        
+        // Drag slider to manual scrub standard 2PI radians cycle
+        ImGui::SliderFloat("Time of Day Axis", &m_TimeOfDay, 0.0f, 6.2831f);
+        
+        ImGui::Separator();
+        ImGui::Text("Normalized Sun Vector: X: %.2f | Y: %.2f", m_DynamicSunDir.x, m_DynamicSunDir.y);
+        
+        // Added the missing exposure override slider to your workspace layout
+        ImGui::SliderFloat("God Ray Exposure Override", &m_GodRayExposureOverride, 0.0f, 1.0f);
+        
+        ImGui::End();
+    }
+
+    // Submit generated layout pixels straight down to active OpenGL context state
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Cleanup Pipeline State
+    m_ScreenQuadVAO->Unbind();
+    m_GodRayShader->Unbind();
+    m_CubeVAO->Unbind(); 
+    m_LitShader->Unbind();
 }
+
 
 void GameLayer::OnDetach() {
     ENGINE_WARN("GameLayer Detached.");
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
 }

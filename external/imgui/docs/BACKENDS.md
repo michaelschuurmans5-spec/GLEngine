@@ -72,14 +72,13 @@ For example, the [example_win32_directx11](https://github.com/ocornut/imgui/tree
 
 In the [backends/](https://github.com/ocornut/imgui/blob/master/backends) folder:
 
-List of Platform Backends:
+List of Platforms Backends:
 
     imgui_impl_android.cpp      ; Android native app API
     imgui_impl_glfw.cpp         ; GLFW (Windows, macOS, Linux, etc.) http://www.glfw.org/
     imgui_impl_osx.mm           ; macOS native API (not as feature complete as glfw/sdl backends)
     imgui_impl_sdl2.cpp         ; SDL2 (Windows, macOS, Linux, iOS, Android) https://www.libsdl.org
     imgui_impl_sdl3.cpp         ; SDL3 (Windows, macOS, Linux, iOS, Android) https://www.libsdl.org
-    imgui_impl_qnx.cpp          ; QNX Screen
     imgui_impl_win32.cpp        ; Win32 native API (Windows)
     imgui_impl_glut.cpp         ; GLUT/FreeGLUT (this is prehistoric software and absolutely not recommended today!)
 
@@ -185,7 +184,6 @@ The Platform backends in impl_impl_XXX.cpp files contain many implementations.
   - `ImGuiBackendFlags_HasSetMousePos`: supports io.WantSetMousePos requests to reposition the OS mouse position (only used if io.ConfigNavMoveSetMousePos is set).
   - `ImGuiBackendFlags_PlatformHasViewports` supports multiple viewports. (multi-viewports only)
   - `ImGuiBackendFlags_HasMouseHoveredViewport` supports calling io.AddMouseViewportEvent() with the viewport under the mouse. IF POSSIBLE, ignore viewports with the ImGuiViewportFlags_NoInputs flag. If this cannot be done, Dear ImGui needs to use a flawed heuristic to find the viewport under mouse position, as it doesn't know about foreign windows. (multi-viewports only)
-  - `ImGuiBackendFlags_HasParentViewport` supports honoring viewport->ParentViewportId value, by applying the corresponding parent/child relation at the Platform level.
 
 **In your `ImGui_ImplXXX_NewFrame()` function:**
 - Set `io.DeltaTime` to the time elapsed (in seconds) since last frame.
@@ -236,7 +234,9 @@ void MyImGuiBackend_RenderDrawData(ImDrawData* draw_data)
     // - Scissor enabled
     MyEngineSetupenderState();
 
-    // TODO: Setup texture sampler to bilinear (NOT point/nearest filtering).
+    // TODO: Setup texture sampling state
+    // - Sample with bilinear filtering (NOT point/nearest filtering).
+    // - Use 'io.Fonts->Flags |= ImFontAtlasFlags_NoBakedLines;' to allow point/nearest filtering.
 
     // TODO: Setup viewport covering draw_data->DisplayPos to draw_data->DisplayPos + draw_data->DisplaySize
 

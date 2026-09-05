@@ -3,8 +3,8 @@
 #include "core/Window.h"
 #include "GLFW/glfw3.h"
 
-
 #include <iostream>
+
 
 // INIT STATIC INSTANCE POINTER
 Application* Application::s_instance = nullptr;
@@ -51,10 +51,18 @@ void Application::Run() {
 
 	std::cout << "Engine Running..." << std::endl;
 
+	float lastFrameTime = 0.0f;
+
 	// MAIN GAME LOOP
 	while (m_isRunning && !m_window->shouldClose()) {
+
+		// 1. CALCULATE DELTA TIME (Time passed between this frame and last frame)
+		float currentFrameTime = (float)glfwGetTime();
+		float deltaTime = currentFrameTime - lastFrameTime;
+		lastFrameTime = currentFrameTime;
+
 		ProcessInput();
-		Update();
+		Update(deltaTime);
 		Render();
 		// SWAP BUFFERS & UPDATE WINDOW EVENTS
 		m_window->swapBuffers();
@@ -68,11 +76,11 @@ void Application::ProcessInput()
 	m_window->processInput();
 }
 
-void Application::Update()
+void Application::Update(float deltaTime)
 {
 	// UPDATE GAME LOGIC
 	for (Layer* layer : m_LayerStack) {
-		layer->OnUpdate();
+		layer->OnUpdate(deltaTime);
 	}
 }
 

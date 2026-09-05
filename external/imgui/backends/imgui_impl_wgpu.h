@@ -19,8 +19,6 @@
 //  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
 //  [X] Renderer: Expose selected render state for draw callbacks to use. Access in '(ImGui_ImplXXXX_RenderState*)GetPlatformIO().Renderer_RenderState'.
 //  [X] Renderer: Texture updates support for dynamic font system (ImGuiBackendFlags_RendererHasTextures).
-// Missing features or Issues:
-//  [ ] Renderer: Multi-viewport support (multiple windows), useful for desktop.
 
 // You can use unmodified imgui_impl_* files in your project. See examples/ folder for examples of using this.
 // Prefer including the entire imgui/ repository into your project (either as a copy or as a submodule), and only build the backends you need.
@@ -97,9 +95,10 @@ bool        ImGui_ImplWGPU_IsSurfaceStatusSubOptimal(WGPUSurfaceGetCurrentTextur
 void        ImGui_ImplWGPU_DebugPrintAdapterInfo(const WGPUAdapter& adapter);
 const char* ImGui_ImplWGPU_GetBackendTypeName(WGPUBackendType type);
 const char* ImGui_ImplWGPU_GetAdapterTypeName(WGPUAdapterType type);
+#if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
 const char* ImGui_ImplWGPU_GetDeviceLostReasonName(WGPUDeviceLostReason type);
 const char* ImGui_ImplWGPU_GetErrorTypeName(WGPUErrorType type);
-#if defined(IMGUI_IMPL_WEBGPU_BACKEND_WGPU) && !defined(__EMSCRIPTEN__)
+#elif defined(IMGUI_IMPL_WEBGPU_BACKEND_WGPU)
 const char* ImGui_ImplWGPU_GetLogLevelName(WGPULogLevel level);
 #endif
 

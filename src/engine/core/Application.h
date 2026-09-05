@@ -2,8 +2,11 @@
 
 #include "core/Window.h"
 #include "core/LayerStack.h"
+
 #include <memory>
 
+
+enum class AppMode { Game, Editor };
 
 class Application {
 
@@ -23,12 +26,18 @@ public:
 	static Application& Get() { return *s_instance; }
 	Window& GetWindow() { return *m_window; }
 
+	// New state management properties
+	inline AppMode GetMode() const { return m_currentMode; }
+	inline void SetMode(AppMode mode) { m_currentMode = mode; }
+
+
 private:
 	// CORE GAME LOOP PHASES
 	void ProcessInput();
-	void Update();
+	void Update(float deltaTime);
 	void Render();
 
+	AppMode m_currentMode = AppMode::Game;
 
 private:
 	// POINTERS & SMART POINTERS

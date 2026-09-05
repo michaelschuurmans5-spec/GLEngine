@@ -1,50 +1,51 @@
-#version 330 core
-out vec4 FragColor;
+#version 410 core
+
+layout(location = 0) out vec4 fragColor;
 
 in vec2 v_TexCoords;
 
-uniform sampler2D u_ScreenTexture; // Your rendered game scene
-uniform vec2 u_LightScreenPos;  // Light x y converted to screen coords 
+uniform sampler2D u_ScreenTexture; // Pass 1 scene texture
+uniform vec2 u_LightScreenPos;     // Sun projection coordinate
+uniform float u_Exposure;          // Dynamic intensity slider / height factor
 
-// Raymarching Parameters
-const int NUM_SAMPLES = 32;       // Higher = smoother rays, lower = faster performance
-uniform float u_Density = 0.5;    // How long the rays are
-uniform float u_Weight = 0.05;    // How bright the rays are
-uniform float u_Decay = 0.95;     // How fast the rays fade out over distance
-uniform float u_Exposure = 0.3;   // Overall intensity multiplier
+// God ray constants for screen space radial blur step sampling
+const int NUM_SAMPLES = 100;
+const float Density = 1.0;
+const float Weight = 0.01;
+const float Decay = 0.98;
 
-void main() {
-    // Calculate the vector pointing from this pixel to the light source
+void main()
+{
+    // 1. Sample your clean, un-blurred base game scene frame
+    vec4 baseSceneColor = texture(u_ScreenTexture, v_TexCoords);
+    
+    // 2. Initialize screen space raymarching loop paths
     vec2 textCoords = v_TexCoords;
     vec2 deltaTextCoords = (textCoords - u_LightScreenPos);
-
-     // Divide the distance by the number of samples to get our step size
-    deltaTextCoords *= 1.0 / float(NUM_SAMPLES) * u_Density;
-
-     // Sample the initial pixel color
-    vec4 color = texture(u_ScreenTexture, textCoords);
+    deltaTextCoords *= 1.0 / float(NUM_SAMPLES) * Density;
     
-    // Track illumination decay over the ray length
     float illuminationDecay = 1.0;
+    vec4 lightRaysAccumulation = vec4(0.0);
     
-    // MARCH! Walk along the line toward the light source
-    for (int i = 0; i < NUM_SAMPLES; i++) {
-        // Step closer to the light source
+    // March a line along the screen toward the light coordinate position
+    for (int i = 0; i < NUM_SAMPLES; i++)
+    {
         textCoords -= deltaTextCoords;
+        vec4 colorSample = texture(u_ScreenTexture, textCoords);
         
-        // Sample the scene at this step
-        vec4 sampleColor = texture(u_ScreenTexture, textCoords);
-        
-        // Multiply by weight and current decay factor
-        sampleColor *= u_Weight * illuminationDecay;
-        
-        // Accumulate the light ray brightness
-        color += sampleColor;
-        
-        // Exponentially decay the light intensity for the next step
-        illuminationDecay *= u_Decay;
+        colorSample *= Weight;
+        colorSample *= illuminationDecay;
+        lightRaysAccumulation += colorSample;
+        illuminationDecay *= Decay;
     }
     
-    // Output the final scene combined with the calculated volumetric rays
-    FragColor = color * u_Exposure;
+    // Multiply ONLY the streaks by your dynamic exposure multiplier
+    lightRaysAccumulation *= u_Exposure;
+    
+    // ===================================================================
+    // FIXED: ADD THE LIGHT STREAKS ON TOP OF YOUR BASE SCENE GEOMETRY
+    // ===================================================================
+    // If exposure falls to 0.0, lightRaysAccumulation becomes 0.0, 
+    // leaving your base scene completely visible instead of multiplying into black!
+    fragColor = baseSceneColor + lightRaysAccumulation;
 }

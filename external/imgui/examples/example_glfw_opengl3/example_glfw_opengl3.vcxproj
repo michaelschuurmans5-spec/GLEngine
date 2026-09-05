@@ -92,7 +92,6 @@
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>..\..;..\..\backends;..\libs\glfw\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <SupportJustMyCode>false</SupportJustMyCode>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -108,7 +107,6 @@
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>..\..;..\..\backends;..\libs\glfw\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <SupportJustMyCode>false</SupportJustMyCode>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

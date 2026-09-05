@@ -18,7 +18,7 @@ public:
     // OVERRIDING THE LIFECYCLE HOOKS FROM YOUR BASE LAYER CLASS
     virtual void OnAttach() override;
     virtual void OnDetach() override;
-    virtual void OnUpdate() override;
+    virtual void OnUpdate(float deltaTime) override;
     virtual void OnRender() override;
 private:
     // SMART POINTERS
@@ -53,7 +53,9 @@ private:
     // SUN VARIABLES 
     float m_TimeOfDay = 0.0f; // Tracks our day/night cycle clock
     glm::vec3 m_DynamicSunDir = glm::vec3(0.0f, 1.0f, 0.0f); // The current 3D direction pointing toward the sun
-    
+    bool m_F2KeyPressedLastFrame = false;
+    float m_GodRayExposureOverride = 0.3f;
+
 
     // SKY ELEMENTS
     std::shared_ptr<Shader> m_SkyShader; 

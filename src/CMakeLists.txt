@@ -28,6 +28,16 @@ set(ENGINE_SOURCES
     # Resources 
     "engine/resources/ModelLoader.h"
     "engine/resources/ModelLoader.cpp"
+
+    # ========================================================
+    # DEAR IMGUI SOURCE FILES (Compiled directly into Engine)
+    # ========================================================
+    "../external/imgui/imgui.cpp"
+    "../external/imgui/imgui_draw.cpp"
+    "../external/imgui/imgui_tables.cpp"
+    "../external/imgui/imgui_widgets.cpp"
+    "../external/imgui/backends/imgui_impl_glfw.cpp"
+    "../external/imgui/backends/imgui_impl_opengl3.cpp"
 )
 
 # Disable Assimp's unit tests and sample apps (removes a huge chunk of files)
@@ -43,7 +53,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp ${CMAKE_CURRENT_
 
 
 # Compile the core engine as a static library
-add_library(EngineCore STATIC ${ENGINE_SOURCES} "engine/renderer/Framebuffer.h" "engine/renderer/Framebuffer.cpp")
+add_library(EngineCore STATIC ${ENGINE_SOURCES})
 
 
 # Expose include directories so files can find each other via clean paths
@@ -51,14 +61,17 @@ target_include_directories(EngineCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
     ${CMAKE_CURRENT_SOURCE_DIR}/../external 
     ${CMAKE_CURRENT_SOURCE_DIR}/../external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/imgui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../external/imgui/backends
     ${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp
     ${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp/include
-    
 )
+
+# Tell ImGui to use GLAD loader hooks for binding OpenGL functions
+target_compile_definitions(EngineCore PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
 
 # Link hardware dependencies directly into your engine library
 target_link_libraries(EngineCore PUBLIC glfw glad assimp)
-
 
 
 # B. BUILD THE RUNNABLE GAME TARGET (SANDBOX)
@@ -69,7 +82,7 @@ set(SANDBOX_SOURCES
 )
 
 # Create the final desktop executable 
-add_executable(SandboxApp ${SANDBOX_SOURCES} "engine/renderer/Framebuffer.h" "engine/renderer/Framebuffer.cpp")
+add_executable(SandboxApp ${SANDBOX_SOURCES})
 
 # Link your sandbox executable directly against your custom engine
 target_link_libraries(SandboxApp PRIVATE EngineCore)
