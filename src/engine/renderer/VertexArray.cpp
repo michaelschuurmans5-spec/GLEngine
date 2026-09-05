@@ -24,6 +24,11 @@ void VertexArray::AddVertexBuffer(const
 	// BIND THE SOURCE VERTEX BUFFER ASSET TO CONNECT THEM: translates data
 	vertexBuffer->Bind();
 
+	// KEEP A REFERENCE so this buffer isn't destroyed (and its GL buffer
+	// deleted) once the caller's local shared_ptr goes out of scope - see
+	// the comment on m_VertexBuffers in VertexArray.h.
+	m_VertexBuffers.push_back(vertexBuffer);
+
 	const auto& layout = vertexBuffer->GetLayout();
 	uint32_t elementIndex = 0;
 

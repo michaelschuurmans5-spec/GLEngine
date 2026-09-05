@@ -29,9 +29,7 @@ set(ENGINE_SOURCES
     "engine/resources/ModelLoader.h"
     "engine/resources/ModelLoader.cpp"
 
-    # ========================================================
     # DEAR IMGUI SOURCE FILES (Compiled directly into Engine)
-    # ========================================================
     "../external/imgui/imgui.cpp"
     "../external/imgui/imgui_draw.cpp"
     "../external/imgui/imgui_tables.cpp"
@@ -52,7 +50,7 @@ set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE INTERNAL "") # Turn on .gltf loader
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../external/assimp ${CMAKE_CURRENT_BINARY_DIR}/assimp_build)
 
 
-# Compile the core engine as a static library
+# Compile the core engine as a static library (FIXED: Removed broken Level.cpp references)
 add_library(EngineCore STATIC ${ENGINE_SOURCES})
 
 
@@ -81,7 +79,7 @@ set(SANDBOX_SOURCES
     "sandbox/GameLayer.cpp" 
 )
 
-# Create the final desktop executable 
+# Create the final desktop executable (FIXED: Removed broken Level.cpp references)
 add_executable(SandboxApp ${SANDBOX_SOURCES})
 
 # Link your sandbox executable directly against your custom engine

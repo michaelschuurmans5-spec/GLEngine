@@ -1,455 +1,372 @@
 #include "GameLayer.h"
+#include "core/Application.h"
 #include "core/Log.h"
-#include "core/Application.h" 
-#include "renderer/Camera.h" 
-#include "resources/ModelLoader.h" 
+#include "resources/ModelLoader.h"
 #include "resources/AssetManager.h"
 
-#include <glad/glad.h>
-#include <glfw/glfw3.h>
-#include <cmath>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include "GLFW/glfw3.h"
 
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 
-static glm::vec3 s_CameraPos = glm::vec3(0.0f, 1.0f, 4.0f); 
-static float s_CameraMoveSpeed = 0.04f;
+#include <glm/gtc/matrix_transform.hpp>
+#include <glad/glad.h>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
-static double s_LastX = 400.0, s_LastY = 300.0;
+// Static workspace configurations
+static glm::vec3 s_CameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
+static float s_CameraMoveSpeed = 0.05f;
 static bool s_FirstMouse = true;
+static double s_LastX = 400.0, s_LastY = 300.0;
 
-GameLayer::GameLayer() : Layer("GameSandboxLayer"),
-m_GodRayExposureOverride(0.3f) {}
+// STANDALONE FILE I/O HELPERS (Defined at the top so OnRender can see them)
+static void SaveMap(const std::string& path, float time, const std::vector<LevelEntityInstance>& list) {
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        std::cout << "[Level Editor Error] Could not open file for writing: " << path << std::endl;
+        return;
+    }
+    out << "TIME " << time << "\n";
+    for (const auto& e : list) {
+        out << "ENTITY\nNAME " << e.Name << "\nISCUBE " << (e.IsPrimitiveCube ? "1" : "0") << "\n";
+        out << "POS " << e.Position.x << " " << e.Position.y << " " << e.Position.z << "\n";
+        out << "ROT " << e.Rotation.x << " " << e.Rotation.y << " " << e.Rotation.z << "\n";
+        out << "SCALE " << e.Scale.x << " " << e.Scale.y << " " << e.Scale.z << "\nEND\n";
+    }
+    out.close();
+}
+
+static void LoadMap(const std::string& path, float& time, std::vector<LevelEntityInstance>& list) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        std::cout << "[Level Editor Error] Could not load level file: " << path << std::endl;
+        return;
+    }
+    list.clear();
+    std::string line, tag; LevelEntityInstance current; bool inEntity = false;
+    while (std::getline(in, line)) {
+        if (line.empty() || line == "#") continue;
+        std::istringstream ss(line); ss >> tag;
+        if (tag == "TIME") ss >> time;
+        else if (tag == "ENTITY") { current = LevelEntityInstance(); inEntity = true; }
+        else if (tag == "NAME" && inEntity) { std::getline(ss, current.Name); if (!current.Name.empty() && current.Name[0] == ' ') current.Name.erase(0, 1); }
+        else if (tag == "ISCUBE" && inEntity) { std::string val; ss >> val; current.IsPrimitiveCube = (val == "1"); }
+        else if (tag == "POS" && inEntity) ss >> current.Position.x >> current.Position.y >> current.Position.z;
+        else if (tag == "ROT" && inEntity) ss >> current.Rotation.x >> current.Rotation.y >> current.Rotation.z;
+        else if (tag == "SCALE" && inEntity) ss >> current.Scale.x >> current.Scale.y >> current.Scale.z;
+        else if (tag == "END" && inEntity) { list.push_back(current); inEntity = false; }
+    }
+    in.close();
+}
+
+GameLayer::GameLayer() : Layer("GameSandboxLayer") {}
 
 void GameLayer::OnAttach() {
-    ENGINE_INFO("GameLayer Attached! Loading Multi-Entity 3D Scene...");
-
-    // SETUP OBJECT A: THE 3D CUBE GEOMETRY
-    float cubeVertices[] = {
-        // Front Face          // UVs
-        -0.5f, -0.5f,  0.5f,   0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,   1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,   1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,   0.0f, 1.0f,
-        // Back Face
-        -0.5f, -0.5f, -0.5f,   1.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,   0.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,   0.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,   1.0f, 1.0f
-    };
-    uint32_t cubeIndices[] = {
-        0, 1, 2,  2, 3, 0, // Front
-        1, 5, 6,  6, 2, 1, // Right
-        7, 6, 5,  5, 4, 7, // Back
-        4, 0, 3,  3, 7, 4, // Left
-        3, 2, 6,  6, 7, 3, // Top
-        4, 5, 1,  1, 0, 4  // Bottom
-    };
-
-    m_CubeVAO = std::make_shared<VertexArray>();
-    m_CubeVBO = std::make_shared<VertexBuffer>(cubeVertices, (uint32_t)sizeof(cubeVertices));
-
-    //Explicitly declare layout
-    m_CubeVBO->SetLayout({
-       { ShaderDataType::Float3, "aPos" },
-       { ShaderDataType::Float2, "aTexCoord" }
-    });
-
-    m_CubeVAO->AddVertexBuffer(m_CubeVBO);
-    m_CubeEBO = std::make_shared<IndexBuffer>(cubeIndices, 36);
-    m_CubeVAO->SetIndexBuffer(m_CubeEBO);
-
-    // SETUP OBJECT B: ASSIMP HUMAN MODEL IMPORT
-    LoadedMeshData humanData;
-    std::string humanPath = std::string(ENGINE_ASSET_DIR) + "Models/Basic Mesh Rigged/Human/Base Mesh sculpt 2.obj";
-
-    if (ModelLoader::LoadMesh(humanPath, humanData)) {
-        m_HumanIndexCount = (uint32_t)humanData.Indices.size();
-
-        m_HumanVAO = std::make_shared<VertexArray>();
-        m_HumanVBO = std::make_shared<VertexBuffer>((float*)humanData.Vertices.data()
-            , (uint32_t)(humanData.Vertices.size() * sizeof(ModelVertex)));
-
-        // Explicitly declare layout
-        m_HumanVBO->SetLayout({
-        { ShaderDataType::Float3, "aPos" },
-        { ShaderDataType::Float2, "aTexCoord" },
-        { ShaderDataType::Float3, "aNormal" }
-        });
-
-        m_HumanVAO->AddVertexBuffer(m_HumanVBO);
-        m_HumanEBO = std::make_shared<IndexBuffer>(humanData.Indices.data(), m_HumanIndexCount);
-        m_HumanVAO->SetIndexBuffer(m_HumanEBO);
-    }
-    else {
-        ENGINE_ERROR("Failed to load human mesh asset!");
-    }
-
-    // CORE ASSETS INITIALIZATION
-    std::string staticVert = std::string(ENGINE_ASSET_DIR) + "Shaders/VertexDeformation/static.vert";
-    std::string unlitFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/unlit.frag";
-    std::string litFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/forward_lit.frag";
-    std::string godRayVert = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/god_rays.vert";
-    std::string godRayFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/god_rays.frag";
-
-    m_UnlitShader = AssetManager::GetShader(staticVert, unlitFrag);
-    m_LitShader = AssetManager::GetShader(staticVert, litFrag);
-    m_GodRayShader = AssetManager::GetShader(godRayVert, godRayFrag);
-
-    std::string texPath = std::string(ENGINE_ASSET_DIR) + "Textures/Snow/Snow010A_2K-PNG_Color.png";
-    m_Texture = AssetManager::GetTexture(texPath);
-
-    m_UnlitShader->Bind();
-    int unlitTexLoc= glGetUniformLocation(m_UnlitShader->GetRendererID(), "u_Texture");
-    if (unlitTexLoc != -1) glUniform1i(unlitTexLoc, 0);
-
-    m_Camera = std::make_unique<Camera>(80.0f, 1.6f, 0.1f, 100.0f);
-    m_Camera->SetPosition(s_CameraPos);
-
-    // INIT OFF SCREEN RENDERING CANVAS
-    m_Framebuffer = std::make_unique<Framebuffer>(800, 600);
-
-    // NORMLIZED COORDINATE SPACES COVERING FULL WINDOW AREA 
-    float quadVertices[] = {
-        // Positions   // TexCoords
-        -1.0f,  1.0f,  0.0f, 1.0f, // Top-Left
-        -1.0f, -1.0f,  0.0f, 0.0f, // Bottom-Left
-         1.0f, -1.0f,  1.0f, 0.0f, // Bottom-Right
-
-        -1.0f,  1.0f,  0.0f, 1.0f, // Top-Left
-         1.0f, -1.0f,  1.0f, 0.0f, // Bottom-Right
-         1.0f,  1.0f,  1.0f, 1.0f  // Top-Right
-    };
-
-    m_ScreenQuadVAO = std::make_shared<VertexArray>();
-    m_ScreenQuadVBO = std::make_shared<VertexBuffer>(quadVertices, (uint32_t)sizeof(quadVertices));
-
-    m_ScreenQuadVBO->SetLayout({
-        { ShaderDataType::Float2, "aPos" },
-        { ShaderDataType::Float2, "aTexCoords" }
-        });
-    m_ScreenQuadVAO->AddVertexBuffer(m_ScreenQuadVBO);
-
-    m_GodRayShader->Bind();
-    int screenTexLoc = glGetUniformLocation(m_GodRayShader->GetRendererID(), "u_ScreenTexture");
-    if (screenTexLoc != -1) glUniform1i(screenTexLoc, 0);
-
-    // SKY
-    float skyboxVertices[] = {
-        // Positions          
-        -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-        -1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f
-    };
-    // SKY PATHS
-    std::string skyVert = std::string(ENGINE_ASSET_DIR) + "Shaders/VertexDeformation/sky.vert";
-    std::string skyFrag = std::string(ENGINE_ASSET_DIR) + "Shaders/ShadingModels/sky.frag";
-    m_SkyShader = AssetManager::GetShader(skyVert, skyFrag);
-    // ARRAY & BUFFERS
-    m_SkyboxVAO = std::make_shared<VertexArray>();
-    m_SkyboxVBO = std::make_shared<VertexBuffer>(skyboxVertices, (uint32_t)sizeof(skyboxVertices));
-    // LAYOUT 
-    m_SkyboxVBO->SetLayout({
-    { ShaderDataType::Float3, "aPos" }
-        });
-    m_SkyboxVAO->AddVertexBuffer(m_SkyboxVBO);
+    ENGINE_INFO("Integrated Level Editor Attached!");
 
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glEnable(GL_DEPTH_TEST);
 
-    // INITIALIZE DEAR IMGUI BACKENDS
+    // 1. Setup Camera & Framebuffer
+    int w = 0, h = 0;
+    glfwGetFramebufferSize(window, &w, &h);
+    // If the window returns 0, clamp it to a standard default safety boundary aspect ratio
+    if (w <= 0 || h <= 0) {
+        w = 1280;
+        h = 720;
+    }
+    m_ViewportWidth = w; m_ViewportHeight = h;
+    m_Framebuffer = std::make_unique<Framebuffer>(m_ViewportWidth, m_ViewportHeight);
+
+    float aspect = (float)m_ViewportWidth / (float)m_ViewportHeight;
+    m_Camera = std::make_unique<Camera>(80.0f, aspect, 0.1f, 1000.0f);
+    m_Camera->SetPosition(s_CameraPos);
+
+    // 2. Setup Master Cube Primitives
+    float cubeVertices[] = {
+        -0.5f,-0.5f, 0.5f, 0.0f,0.0f,  0.5f,-0.5f, 0.5f, 1.0f,0.0f,  0.5f, 0.5f, 0.5f, 1.0f,1.0f, -0.5f, 0.5f, 0.5f, 0.0f,1.0f,
+        -0.5f,-0.5f,-0.5f, 1.0f,0.0f,  0.5f,-0.5f,-0.5f, 0.0f,0.0f,  0.5f, 0.5f,-0.5f, 0.0f,1.0f, -0.5f, 0.5f,-0.5f, 1.0f,1.0f
+    };
+    uint32_t cubeIndices[] = {
+        0,1,2, 2,3,0, 1,5,6, 6,2,1, 7,6,5, 5,4,7, 4,0,3, 3,7,4, 3,2,6, 6,7,3, 4,5,1, 1,0,4
+    };
+
+    m_CubeVAO = std::make_shared<VertexArray>();
+    auto cubeVBO = std::make_shared<VertexBuffer>(cubeVertices, sizeof(cubeVertices));
+    cubeVBO->SetLayout({ { ShaderDataType::Float3, "aPos" }, { ShaderDataType::Float2, "aTexCoord" } });
+    m_CubeVAO->AddVertexBuffer(cubeVBO);
+    m_CubeVAO->SetIndexBuffer(std::make_shared<IndexBuffer>(cubeIndices, 36));
+
+    // 3. Setup Rigged Obstacle Model via Assimp Loader
+    std::string humanPath = std::string(ENGINE_ASSET_DIR) + "Models/Basic Mesh Rigged/Human/Base Mesh sculpt 2.obj";
+    LoadedMeshData humanData;
+    if (ModelLoader::LoadMesh(humanPath, humanData)) {
+        m_HumanIndexCount = (uint32_t)humanData.Indices.size();
+        m_HumanVAO = std::make_shared<VertexArray>();
+        auto humanVBO = std::make_shared<VertexBuffer>((float*)humanData.Vertices.data(), (uint32_t)(humanData.Vertices.size() * sizeof(ModelVertex)));
+        humanVBO->SetLayout({ { ShaderDataType::Float3, "aPos" }, { ShaderDataType::Float2, "aTexCoord" }, { ShaderDataType::Float3, "aNormal" } });
+        m_HumanVAO->AddVertexBuffer(humanVBO);
+        m_HumanVAO->SetIndexBuffer(std::make_shared<IndexBuffer>(humanData.Indices.data(), m_HumanIndexCount));
+    }
+
+    // 4. Setup Post-Processing Screenspace Screen Billboard Quad
+    float quadVertices[] = {
+        -1.0f,  1.0f,  0.0f, 1.0f,  -1.0f, -1.0f,  0.0f, 0.0f,   1.0f, -1.0f,  1.0f, 0.0f,
+        -1.0f,  1.0f,  0.0f, 1.0f,   1.0f, -1.0f,  1.0f, 0.0f,   1.0f,  1.0f,  1.0f, 1.0f
+    };
+    m_ScreenQuadVAO = std::make_shared<VertexArray>();
+    auto quadVBO = std::make_shared<VertexBuffer>(quadVertices, sizeof(quadVertices));
+    quadVBO->SetLayout({ { ShaderDataType::Float2, "aPos" }, { ShaderDataType::Float2, "aTexCoord" } });
+    m_ScreenQuadVAO->AddVertexBuffer(quadVBO);
+
+    // 5. Setup Infinite Skybox Backdrop Box Primitive
+    float skyboxVertices[] = {
+        -1,1,-1, -1,-1,-1, 1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1,  -1,-1,1, -1,-1,-1, -1,1,-1, -1,1,-1, -1,1,1, -1,-1,1,
+         1,-1,-1,  1,-1,1,  1,1,1,  1,1,1,  1,1,-1,  1,-1,-1,  -1,-1,1, -1,1,1,  1,1,1,  1,1,1,  1,-1,1, -1,-1,1,
+        -1,1,-1,   1,1,-1,  1,1,1,  1,1,1,  -1,1,1,  -1,1,-1,  -1,-1,-1, -1,-1,1, 1,-1,1, 1,-1,1, 1,-1,-1, -1,-1,-1
+    };
+    m_SkyboxVAO = std::make_shared<VertexArray>();
+    auto skyVBO = std::make_shared<VertexBuffer>(skyboxVertices, sizeof(skyboxVertices));
+    skyVBO->SetLayout({ { ShaderDataType::Float3, "aPos" } });
+    m_SkyboxVAO->AddVertexBuffer(skyVBO);
+
+    // 6. Gather Shaders & Engine Textures
+    std::string assetPath = std::string(ENGINE_ASSET_DIR);
+    m_UnlitShader = AssetManager::GetShader(
+        assetPath + "Shaders/VertexDeformation/static.vert", 
+        assetPath + "Shaders/ShadingModels/unlit.frag"
+    );
+    m_LitShader = AssetManager::GetShader(
+        assetPath + "Shaders/VertexDeformation/static.vert",
+        assetPath + "Shaders/ShadingModels/forward_lit.frag"
+    );
+    m_GodRayShader = AssetManager::GetShader(
+        assetPath + "Shaders/ShadingModels/god_rays.vert",
+        assetPath + "Shaders/ShadingModels/god_rays.frag"
+    );
+    // Change your m_SkyShader assignment to look here:
+    m_SkyShader = AssetManager::GetShader(
+        assetPath + "Shaders/VertexDeformation/sky.vert",
+        assetPath + "Shaders/ShadingModels/sky.frag"
+    );
+    m_Texture = std::make_shared<Texture>(assetPath + "Textures/Snow/Snow010A_2K-PNG_Color.png");
+
+    // Initialize ImGui Runtime bindings
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable arrow keys in menus
-
-    ImGui::StyleColorsDark(); // Sleek dark mode styling
-
-    // Init context bindings matching your GLAD pipeline version
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 410");
+
+    // Spawn starting floor runway plate
+    LevelEntityInstance ground;
+    ground.Name = "Starting Ground Platform";
+    ground.Position = glm::vec3(0.0f, -2.0f, 0.0f);
+    ground.Scale = glm::vec3(20.0f, 0.5f, 6.0f);
+    ground.IsPrimitiveCube = true;
+    m_EditorEntities.push_back(ground);
 }
 
-void GameLayer::OnUpdate(float delaTime) {
-
+void GameLayer::OnUpdate(float deltaTime) {
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
 
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    }
-
-    // SMART LATCH: Remembers its value across frames to prevent multi-triggering
-    static bool s_F2KeyPressedLastFrame = false;
+    // Toggle states via dynamic latch flags
     bool isF2PressedNow = (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS);
-
-    // PRESS F2 TO FLIP ENGINE MODE AT RUNTIME
-    if (isF2PressedNow && !s_F2KeyPressedLastFrame) {
+    if (isF2PressedNow && !m_F2KeyPressedLastFrame) {
         if (Application::Get().GetMode() == AppMode::Game) {
             Application::Get().SetMode(AppMode::Editor);
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); // Free cursor for panel sliders
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
         else {
             Application::Get().SetMode(AppMode::Game);
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // Lock cursor back down for gameplay
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
     }
-    s_F2KeyPressedLastFrame = isF2PressedNow;
+    m_F2KeyPressedLastFrame = isF2PressedNow;
 
-    // GATED SIMULATION (Only ticks simulation logic in Game mode)
+    // Gate atmosphere progression timestep to live gameplay tracking
     if (Application::Get().GetMode() == AppMode::Game) {
-        m_TimeOfDay += 0.1f * s_CameraMoveSpeed;
+        m_TimeOfDay += 0.5f * deltaTime;
     }
 
-    // UNGATED VIEWPORT MOVEMENT (Runs in both Game & Editor modes)
-    // WASD Fly controls are now universally accessible [1]
+    // Process camera WASD linear translations in both environments
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) s_CameraPos += s_CameraMoveSpeed * m_Camera->GetFrontVector();
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) s_CameraPos -= s_CameraMoveSpeed * m_Camera->GetFrontVector();
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) s_CameraPos -= m_Camera->GetRightVector() * s_CameraMoveSpeed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) s_CameraPos += m_Camera->GetRightVector() * s_CameraMoveSpeed;
 
-    // CONTINUOUS VECTOR GENERATION (Always runs so ImGui slider reacts instantly)
+    // Generate orbiting environment direction vectors
     m_DynamicSunDir.x = cos(m_TimeOfDay);
     m_DynamicSunDir.y = sin(m_TimeOfDay);
     m_DynamicSunDir.z = -0.5f;
     m_DynamicSunDir = glm::normalize(m_DynamicSunDir);
 
-    // Track mouse coordinates over screen area
     double mouseX, mouseY;
     glfwGetCursorPos(window, &mouseX, &mouseY);
-
-    if (s_FirstMouse) {
-        s_LastX = mouseX;
-        s_LastY = mouseY;
-        s_FirstMouse = false;
-    }
-
-    float xOffset = (float)(mouseX - s_LastX);
-    float yOffset = (float)(s_LastY - mouseY);
-
-    s_LastX = mouseX;
-    s_LastY = mouseY;
-
-    // CONTEXTUAL CAMERA LOOK ROTATION
+    if (s_FirstMouse) { s_LastX = mouseX; s_LastY = mouseY; s_FirstMouse = false; }
+    float xOffset = (float)(mouseX - s_LastX); float yOffset = (float)(s_LastY - mouseY);
+    s_LastX = mouseX; s_LastY = mouseY;
 
     bool isGameMode = (Application::Get().GetMode() == AppMode::Game);
     bool isRightClickHeld = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
 
-    // Look around automatically in Game Mode, OR if holding Right-Click in Editor Mode! [1]
     if (isGameMode || isRightClickHeld) {
-        // If we are in the Editor and holding Right-Click, hide the cursor so we can look freely [1]
-        if (!isGameMode) {
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        }
-
+        if (!isGameMode) glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         m_Camera->ProcessMouseMovement(xOffset, yOffset);
     }
     else {
-        // If we let go of Right-Click in Editor Mode, give the mouse back to ImGui [1]
         if (!isGameMode && glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
     }
-
     m_Camera->SetPosition(s_CameraPos);
 }
 
 void GameLayer::OnRender() {
-    // RETAIN WINDOW SIZE FULL SCREEN
     GLFWwindow* window = Application::Get().GetWindow().getNativeWindow();
     int currentWidth, currentHeight;
     glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
 
-    // RUNTIME CHECKS: Did the user resize or maximize the window?
-    if (currentWidth > 0 && currentHeight > 0 &&
-        (currentWidth != m_ViewportWidth || currentHeight != m_ViewportHeight))
-    {
-        m_ViewportWidth = currentWidth;
-        m_ViewportHeight = currentHeight;
-
-        // Reallocate off-screen texture attachment boundaries dynamically
+    if (currentWidth > 0 && currentHeight > 0 && (currentWidth != m_ViewportWidth || currentHeight != m_ViewportHeight)) {
+        m_ViewportWidth = currentWidth; m_ViewportHeight = currentHeight;
         m_Framebuffer->Resize(m_ViewportWidth, m_ViewportHeight);
-
-        // Update your Camera's internal 3D perspective mapping calculations
         float aspect = (float)m_ViewportWidth / (float)m_ViewportHeight;
-        m_Camera = std::make_unique<Camera>(80.0f, aspect, 0.1f, 1000.0f); // FIXED: Increased far clip to 1000.0f to avoid mesh clipping
+        m_Camera = std::make_unique<Camera>(80.0f, aspect, 0.1f, 1000.0f);
         m_Camera->SetPosition(s_CameraPos);
     }
 
-    // PASS 1: RENDER STANDARD GAME SCENE INTO THE FRAMEBUFFER
+    // PASS 1: RENDER THE SCENE TO THE FRAMEBUFFER
     m_Framebuffer->Bind();
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Dark background helps rays pop!
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // SUB-STEP: RENDER THE PROCEDURAL SKYBOX BACKGROUND
-    // Disable depth mask writing so skybox acts as a true background canvas layer
-    glDepthMask(GL_FALSE); 
-    glDepthFunc(GL_LEQUAL);
-    
+    // Draw Skybox background backdrop canvas
+    glDepthMask(GL_FALSE); glDepthFunc(GL_LEQUAL);
     m_SkyShader->Bind();
-    // Stripping out position vectors from your View matrix so the skybox centers on the camera view path
     glm::mat4 skyViewMatrix = glm::mat4(glm::mat3(m_Camera->GetViewMatrix()));
-    glm::mat4 skyViewProj = m_Camera->GetProjectionMatrix() * skyViewMatrix;
-    m_SkyShader->SetUniformMat4("u_ViewProjection", skyViewProj);
+    m_SkyShader->SetUniformMat4("u_ViewProjection", m_Camera->GetProjectionMatrix() * skyViewMatrix);
     m_SkyShader->SetUniformFloat3("u_DynamicSunDir", m_DynamicSunDir);
     m_SkyShader->SetUniformFloat("u_Time", m_TimeOfDay);
+    m_SkyboxVAO->Bind(); glDrawArrays(GL_TRIANGLES, 0, 36);
+    glDepthMask(GL_TRUE); glDepthFunc(GL_LESS);
 
-    m_SkyboxVAO->Bind();
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-    
-    // Re-enable depth mask writing so standard 3D meshes can use depth sorting safely
-    glDepthMask(GL_TRUE); 
-    glDepthFunc(GL_LESS);
-
-    // SUB-STEP: RENDER 3D MESHES (Cube & Human)
+    // Draw all active placed entities in the level registry loop
     m_Texture->Bind(0);
-    m_UnlitShader->Bind();
-    m_UnlitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
-    glm::mat4 cubeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f));
-    m_UnlitShader->SetUniformMat4("u_Transform", cubeTransform);
-    m_CubeVAO->Bind();
-    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
+    for (const auto& entity : m_EditorEntities) {
+        glm::mat4 transform = glm::translate(glm::mat4(1.0f), entity.Position);
+        transform = glm::rotate(transform, glm::radians(entity.Rotation.x), glm::vec3(1, 0, 0));
+        transform = glm::rotate(transform, glm::radians(entity.Rotation.y), glm::vec3(0, 1, 0));
+        transform = glm::rotate(transform, glm::radians(entity.Rotation.z), glm::vec3(0, 0, 1));
+        transform = glm::scale(transform, entity.Scale);
 
-    // Render Lit Human
-    if (m_HumanVAO) {
-        m_LitShader->Bind();
-        m_LitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
-        glm::mat4 humanTransform = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -0.5f, 0.0f));
-        m_LitShader->SetUniformMat4("u_Transform", humanTransform);
-
-        // LIGHTING (SUN) 
-        glm::vec3 dynamicLightPos = m_DynamicSunDir * 50.0f;
-        glm::vec3 dynamicLightColor = glm::vec3(1.0f, 1.0f, 1.0f);
-
-        if (m_DynamicSunDir.y < 0.2f && m_DynamicSunDir.y > 0.0f) {
-            dynamicLightColor = glm::vec3(1.0f, 0.5f, 0.2f);
+        if (entity.IsPrimitiveCube) {
+            // Protect Cube drawings
+            if (m_UnlitShader && m_CubeVAO) {
+                m_UnlitShader->Bind();
+                m_UnlitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
+                m_UnlitShader->SetUniformMat4("u_Transform", transform);
+                m_CubeVAO->Bind();
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
+            }
         }
-        else if (m_DynamicSunDir.y <= 0.0f) {
-            dynamicLightColor = glm::vec3(0.05f, 0.05f, 0.1f);
-        }
-        
-        // Pass Lighting and Camera positions for Fragment calculations
-        m_LitShader->SetUniformFloat3("u_LightPos", dynamicLightPos);     // FIXED: Using variable matching case
-        m_LitShader->SetUniformFloat3("u_LightColor", dynamicLightColor); // FIXED: Using variable matching case
-        m_LitShader->SetUniformFloat3("u_ViewPos", m_Camera->GetPosition());
+        else {
+            // Heavy protection check on your human obstacle mesh model asset
+            if (m_LitShader && m_HumanVAO) {
+                m_LitShader->Bind();
+                m_LitShader->SetUniformMat4("u_ViewProjection", m_Camera->GetViewProjectionMatrix());
+                m_LitShader->SetUniformMat4("u_Transform", transform);
+                m_LitShader->SetUniformFloat3("u_LightPos", m_DynamicSunDir * 50.0f);
+                m_LitShader->SetUniformFloat3("u_LightColor", glm::vec3(1.0f, 1.0f, 1.0f));
+                m_LitShader->SetUniformFloat3("u_ViewPos", m_Camera->GetPosition());
 
-        m_HumanVAO->Bind();
-        glDrawElements(GL_TRIANGLES, m_HumanIndexCount, GL_UNSIGNED_INT, nullptr);
+                m_HumanVAO->Bind();
+                glDrawElements(GL_TRIANGLES, m_HumanIndexCount, GL_UNSIGNED_INT, nullptr);
+            }
+        }
     }
+    m_Framebuffer->Unbind();
 
-    m_Framebuffer->Unbind(); // Stop rendering to the Framebuffer texture target
-
-    // PASS 2: RENDER POST-PROCESSING GOD RAYS TO THE SCREEN
+    // PASS 2: RENDER POST-PROCESSING GOD RAYS
     glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClearColor(0, 0, 0, 1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // dynamic far-away sun coordinate position for screen projection
-    glm::vec3 sunWorldPos = m_DynamicSunDir * 50.0f;
-    glm::vec4 clipSpacePos = m_Camera->GetViewProjectionMatrix() * glm::vec4(sunWorldPos, 1.0f);
+    if (m_GodRayShader && m_ScreenQuadVAO && m_Framebuffer) {
+        m_GodRayShader->Bind();
+        glm::vec4 clipPos = m_Camera->GetViewProjectionMatrix() * glm::vec4(m_DynamicSunDir * 50.0f, 1.0f);
 
-    // CHECK: Only process god rays if the sun is in front of the camera view frustum
-    m_GodRayShader->Bind();
-    if (clipSpacePos.w > 0.0f) {
-        glm::vec3 ndcPos = glm::vec3(clipSpacePos) / clipSpacePos.w;
-        glm::vec2 lightScreenPos;
-        lightScreenPos.x = (ndcPos.x + 1.0f) * 0.5f;
-        lightScreenPos.y = (ndcPos.y + 1.0f) * 0.5f;
-        m_GodRayShader->SetUniformFloat2("u_LightScreenPos", lightScreenPos);
-        
-        // Adjust intensity uniform dynamically based on mode
-        float exposure = (Application::Get().GetMode() == AppMode::Game)
-                         ? (glm::clamp(m_DynamicSunDir.y, 0.0f, 1.0f) * 0.3f) // Auto-fading at night
-                         : m_GodRayExposureOverride;                          // ImGui Slider control
-                         
-        m_GodRayShader->SetUniformFloat("u_Exposure", exposure);
+        if (clipPos.w > 0.0f) {
+            glm::vec2 screenPos = glm::vec2((clipPos.x / clipPos.w + 1.0f) * 0.5f, (clipPos.y / clipPos.w + 1.0f) * 0.5f);
+            m_GodRayShader->SetUniformFloat2("u_LightScreenPos", screenPos);
+            m_GodRayShader->SetUniformFloat("u_Exposure", (Application::Get().GetMode() == AppMode::Game) ? (glm::clamp(m_DynamicSunDir.y, 0.0f, 1.0f) * 0.3f) : m_GodRayExposureOverride);
+        }
+        else {
+            m_GodRayShader->SetUniformFloat("u_Exposure", 0.0f);
+        }
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_Framebuffer->GetColorAttachmentRendererID());
+        m_ScreenQuadVAO->Bind();
+        glDrawArrays(GL_TRIANGLES, 0, 6);
     }
-    else {
-        m_GodRayShader->SetUniformFloat("u_Exposure", 0.0f);
-    }
-    
-    // Bind the color canvas texture we generated in Pass 1 into slot 0
-    glActiveTexture(GL_TEXTURE0); // Explicitly ensure we are targeted on Texture Slot 0
-    glBindTexture(GL_TEXTURE_2D, m_Framebuffer->GetColorAttachmentRendererID());
-    
-    // Draw the full screen billboard quad to apply the raymarching effect
-    m_ScreenQuadVAO->Bind();
-    glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    // PASS 3: IMGUI TOOL DRAWS (LAYERED OVER POST-PROCESSING)
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+    // PASS 3: RENDER THE IMGUI WORKSPACE DESKTOP LAYOUT
+    ImGui_ImplOpenGL3_NewFrame(); ImGui_ImplGlfw_NewFrame(); ImGui::NewFrame();
 
     if (Application::Get().GetMode() == AppMode::Editor) {
-        ImGui::Begin("Atmosphere Control Workspace");
-        
-        // Drag slider to manual scrub standard 2PI radians cycle
-        ImGui::SliderFloat("Time of Day Axis", &m_TimeOfDay, 0.0f, 6.2831f);
-        
-        ImGui::Separator();
-        ImGui::Text("Normalized Sun Vector: X: %.2f | Y: %.2f", m_DynamicSunDir.x, m_DynamicSunDir.y);
-        
-        // Added the missing exposure override slider to your workspace layout
-        ImGui::SliderFloat("God Ray Exposure Override", &m_GodRayExposureOverride, 0.0f, 1.0f);
-        
+        ImGui::Begin("Level Builder Panel");
+        if (ImGui::Button("Spawn Platform Base Block", ImVec2(-1, 30))) {
+            LevelEntityInstance inst;
+            inst.Name = "Platform Node " + std::to_string(m_EditorEntities.size());
+            inst.IsPrimitiveCube = true;
+            inst.Position = m_Camera->GetPosition() + (m_Camera->GetFrontVector() * 5.0f);
+            m_EditorEntities.push_back(inst);
+            m_ActiveSelectionIndex = (int)m_EditorEntities.size() - 1;
+        }
+        if (ImGui::Button("Spawn Obstacle Rigged Actor", ImVec2(-1, 30))) {
+            LevelEntityInstance inst;
+            inst.Name = "Character Obstacle " + std::to_string(m_EditorEntities.size());
+            inst.IsPrimitiveCube = false;
+            inst.Position = m_Camera->GetPosition() + (m_Camera->GetFrontVector() * 5.0f);
+            m_EditorEntities.push_back(inst);
+            m_ActiveSelectionIndex = (int)m_EditorEntities.size() - 1;
+        }
+
+        ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+        static char levelFileName[64] = { "MyFirstLevel.level" };
+        ImGui::InputText("Save File Name", levelFileName, sizeof(levelFileName));
+
+        std::string fullPath = std::string(ENGINE_ASSET_DIR) + std::string(levelFileName);
+        if (ImGui::Button("Save Current Level Layout", ImVec2(-1, 25))) SaveMap(fullPath, m_TimeOfDay, m_EditorEntities);
+        if (ImGui::Button("Load Map From File Name", ImVec2(-1, 25))) LoadMap(fullPath, m_TimeOfDay, m_EditorEntities);
         ImGui::End();
+
+        ImGui::Begin("Active Scene Graph Hierarchy");
+        ImGui::BeginChild("CollectionTree", ImVec2(180, 0), true);
+        for (int i = 0; i < m_EditorEntities.size(); i++) {
+            if (ImGui::Selectable(m_EditorEntities[i].Name.c_str(), m_ActiveSelectionIndex == i)) m_ActiveSelectionIndex = i;
+        }
+        ImGui::EndChild(); ImGui::SameLine();
+
+        ImGui::BeginChild("PropertiesInspector");
+        if (m_ActiveSelectionIndex >= 0 && m_ActiveSelectionIndex < m_EditorEntities.size()) {
+            auto& target = m_EditorEntities[m_ActiveSelectionIndex];
+            ImGui::Text("Transform Specifications"); ImGui::Separator();
+            ImGui::DragFloat3("World Position Offset", &target.Position.x, 0.05f);
+            ImGui::DragFloat3("Euler Rotations Axis", &target.Rotation.x, 0.5f);
+            ImGui::DragFloat3("Dimension Scaling Matrix", &target.Scale.x, 0.02f);
+            if (ImGui::Button("Delete Object from Map", ImVec2(-1, 22))) { m_EditorEntities.erase(m_EditorEntities.begin() + m_ActiveSelectionIndex); m_ActiveSelectionIndex = -1; }
+        }
+        else { ImGui::Text("Select an entity to view its properties."); }
+        ImGui::EndChild(); ImGui::End();
     }
-
-    // Submit generated layout pixels straight down to active OpenGL context state
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-    // Cleanup Pipeline State
-    m_ScreenQuadVAO->Unbind();
-    m_GodRayShader->Unbind();
-    m_CubeVAO->Unbind(); 
-    m_LitShader->Unbind();
+    ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
-
-
+   
 void GameLayer::OnDetach() {
     ENGINE_WARN("GameLayer Detached.");
 
